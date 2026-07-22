@@ -1,0 +1,95 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Zelia VP",
+        "description": "Connect directly to the Zelia MQTT broker (default port 1883, no authentication).",
+        "data": {
+          "host": "Host / IP address",
+          "port": "MQTT port",
+          "device_id": "Device ID (e.g. zelix_8C4B14821190)",
+          "name": "Name"
+        },
+        "data_description": {
+          "device_id": "MQTT prefix of the device. You can paste only the 12 hex digits."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the MQTT broker",
+      "timeout": "Connection timed out",
+      "invalid_device_id": "Invalid device ID (expected zelix_ + 12 hex digits)"
+    },
+    "abort": {
+      "already_configured": "This Zelia device is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Zelia VP options",
+        "data": {
+          "host": "Host / IP address",
+          "port": "MQTT port",
+          "name": "Name",
+          "availability_timeout": "Availability timeout (seconds)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the MQTT broker",
+      "timeout": "Connection timed out"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "water_temp": { "name": "Water temperature" },
+      "chlorine_prod": { "name": "Chlorine production" },
+      "voltage_ely": { "name": "Electrolysis voltage" },
+      "current_ely": { "name": "Electrolysis current" },
+      "ely_duration_min": { "name": "Production duration" },
+      "ely_duration_compensated": { "name": "Compensated duration" },
+      "conductivity": { "name": "Conductivity" },
+      "internal_temp": { "name": "Internal temperature" },
+      "prod_state": {
+        "name": "Production state",
+        "state": {
+          "stopped": "Stopped",
+          "requested": "Requested",
+          "running": "Running"
+        }
+      },
+      "rssi": { "name": "RSSI" },
+      "error": { "name": "Error code" },
+      "firmware": { "name": "Firmware" },
+      "cell_type": { "name": "Cell type" }
+    },
+    "binary_sensor": {
+      "production_active": { "name": "Production active" },
+      "flow": { "name": "Flow detected" },
+      "cover": { "name": "Pool cover" }
+    },
+    "number": {
+      "power_ely": { "name": "Production power" },
+      "ely_duration_theo": { "name": "Theoretical duration" },
+      "choc_duration": { "name": "Shock duration" },
+      "temp_min_off": { "name": "Minimum temperature stop" },
+      "consigne_orp": { "name": "ORP setpoint" }
+    },
+    "switch": {
+      "winter_mode": { "name": "Winter mode" },
+      "mode_choc": { "name": "Shock mode" }
+    },
+    "select": {
+      "mode_ely": {
+        "name": "Electrolysis mode",
+        "state": {
+          "off": "Off",
+          "programmed": "Programmed",
+          "auto": "Auto",
+          "regulated": "Regulated"
+        }
+      }
+    }
+  }
+}
