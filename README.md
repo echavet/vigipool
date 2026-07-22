@@ -10,7 +10,12 @@ Intégration Home Assistant pour l’électrolyseur de sel **CCEI Zelia VP** (un
 - Modes Off / Programmé / Auto / Régulé / Choc
 - Lecture + commande (puissance, durée, température min, ORP…)
 - Distribution **HACS** avec versions et mises à jour
-- Versionnement **CalVer** `YYYY.M.D` (ex. `2026.7.22`), lisible et aligné avec l’esprit HA
+- Versionnement **CalVer** `YYYY.M.D` (ex. `2026.7.23`), lisible et aligné avec l’esprit HA
+- Logo / icône Vigipool (assets locaux HA 2026.3+)
+
+<p align="center">
+  <img src="custom_components/zelia_vp/brand/icon.png" alt="Vigipool Zelia VP" width="128" height="128">
+</p>
 
 ## Installation (HACS — recommandé)
 

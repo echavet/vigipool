@@ -2,7 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
-Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assistant Core), e.g. `2026.7.22`.
+Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assistant Core), e.g. `2026.7.23`.
+
+## [2026.7.23] - 2026-07-22
+
+### Added
+
+- **Brand logo / icon** from the official-looking Jeedom market Vigipool artwork  
+  ([vigipool_icon.png](https://market.jeedom.com/filestore/market/plugin/images/vigipool_icon.png)).
+- Local HA brand assets (`custom_components/zelia_vp/brand/`) for Home Assistant **2026.3+**.
+- Square 256×256 and 512×512 PNG exports in `brands/zelia_vp/` for optional [home-assistant/brands](https://github.com/home-assistant/brands) PR.
 
 ## [2026.7.22] - 2026-07-22
 
@@ -57,6 +66,7 @@ Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assist
 - Sensors, binary sensors, numbers, switches, select (electrolysis mode).
 - French and English translations, diagnostics, unit tests.
 
+[2026.7.23]: https://github.com/echavet/vigipool/releases/tag/2026.7.23
 [2026.7.22]: https://github.com/echavet/vigipool/releases/tag/2026.7.22
 [0.2.1]: https://github.com/echavet/vigipool/releases/tag/v0.2.1
 [0.2.0]: https://github.com/echavet/vigipool/releases/tag/v0.2.0
