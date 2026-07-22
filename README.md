@@ -10,6 +10,7 @@ Intégration Home Assistant pour l’électrolyseur de sel **CCEI Zelia VP** (un
 - Modes Off / Programmé / Auto / Régulé / Choc
 - Lecture + commande (puissance, durée, température min, ORP…)
 - Distribution **HACS** avec versions et mises à jour
+- Versionnement **CalVer** `YYYY.M.D` (ex. `2026.7.22`), lisible et aligné avec l’esprit HA
 
 ## Installation (HACS — recommandé)
 
@@ -23,8 +24,10 @@ Intégration Home Assistant pour l’électrolyseur de sel **CCEI Zelia VP** (un
 
 ### Mise à jour
 
-HACS notifie les nouvelles versions (tags / GitHub Releases).  
+HACS notifie les nouvelles versions (tags / GitHub Releases au format `YYYY.M.D`).  
 Update en un clic → redémarrer HA.
+
+Si la MàJ n’apparaît pas : HACS → ⋮ → *Reload*, ou réinstaller depuis le custom repository.
 
 ## Installation manuelle
 
