@@ -54,11 +54,12 @@
       "prod_state": {
         "name": "Production state",
         "state": {
-          "stopped": "Stopped",
-          "requested": "Requested",
-          "running": "Running"
+          "off": "Off",
+          "on": "Producing",
+          "reverse": "Polarity reverse"
         }
       },
+      "prod_on_code": { "name": "Production code (prod_on)" },
       "rssi": { "name": "RSSI" },
       "error": { "name": "Error code" },
       "firmware": { "name": "Firmware" },

@@ -21,11 +21,15 @@ DEFAULT_NAME = "Zelia VP"
 # Seconds without MQTT traffic before entities become unavailable.
 DEFAULT_AVAILABILITY_TIMEOUT = 600
 
-# Production state (prod_on) mapping — unknown values map to None at entity layer.
+# Production state (prod_on).
+# Evidence (live + Jeedom): 0 = off, 1 = producing.
+# Value 2 also coincides with cell current/voltage (not "requested"); treated as
+# reverse-polarity / self-clean phase (common on salt cells; not officially documented).
+# Unknown codes → None (enum stays strict).
 PROD_STATE_MAP: dict[int, str] = {
-    0: "stopped",
-    1: "requested",
-    2: "running",
+    0: "off",
+    1: "on",
+    2: "reverse",
 }
 
 # Electrolysis mode (mode_ely).

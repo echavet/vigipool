@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-07-22
+
+### Fixed
+
+- **Production state (`prod_on`)** mapping was wrong (CDC “0/1/2 = Arrêtée/Demandée/En cours”).
+  - Live check: `prod_on=1` with `prod_chlore=19` and cell current → **producing**, not “requested”.
+  - Jeedom only maps `0=stopped`, `1=on` (never “requested”).
+  - New mapping: `0=off`, `1=on`, `2=reverse` (polarity reverse / self-clean **hypothesis**; also seen with non-zero cell power).
+- Added diagnostic sensor **Production code** (`prod_on` raw 0/1/2) and attribute `prod_on_code` on the state enum.
+- Binary **Production active** unchanged (`prod_on > 0`).
+
 ## [0.2.0] - 2026-07-22
 
 ### Changed
@@ -37,5 +48,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Diagnostics dump for troubleshooting.
 - Unit tests for MQTT transforms and device_id normalization.
 
+[0.2.1]: https://github.com/echavet/vigipool/releases/tag/v0.2.1
 [0.2.0]: https://github.com/echavet/vigipool/releases/tag/v0.2.0
 [0.1.0]: https://github.com/echavet/vigipool/releases/tag/v0.1.0

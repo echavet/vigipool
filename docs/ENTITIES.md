@@ -39,13 +39,23 @@ Préfixe MQTT : `{device_id}/…` (ex. `zelix_8C4B14821190`)
 | Durée compensée | `u16_r/ely_duration_compensated/value/reported` | — | min |
 | Conductivité | `u16_r/value_cond/value/reported` | — | mS/cm |
 | Temp. interne | `u16_r/value_temp_int/value/reported` | ÷10 | °C |
-| État production | `u8_r/prod_on/value/reported` | 0/1/2 | enum |
+| État production | `u8_r/prod_on/value/reported` | 0→off, 1→on, 2→reverse* | enum |
+| Code production | `u8_r/prod_on/value/reported` | brut 0/1/2 | diagnostic |
 | RSSI | `i8_r/rssi/info/reported` | — | dBm |
 | Erreur | `u32_r/error/info/reported` | — | — |
 | Firmware | `u16_r/sw_vers/info/reported` | str | — |
 | Type cellule | `u8_r/cell_type/value/reported` | — | — |
 
-**prod_on :** 0 Arrêtée, 1 Demandée, 2 En cours.
+**prod_on (corrigé vs CDC initial) :**
+
+| Code | État HA | Signification |
+|------|---------|----------------|
+| `0` | Arrêtée | Pas de production (Jeedom + captures) |
+| `1` | En production | Production active — confirmé live (`prod_chlore` / courant / tension non nuls) |
+| `2` | Inversion de polarité | Production électrique aussi observée ; **hypothèse** cycle d’auto-nettoyage des électrodes (non documenté CCEI). Jeedom n’expose que 0/1. |
+
+Le binary sensor **Production active** reste `prod_on > 0`.  
+L’enum expose aussi l’attribut `prod_on_code` (et un capteur diagnostic dédié).
 
 ## Binary sensors
 

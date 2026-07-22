@@ -193,6 +193,18 @@ SENSOR_DESCRIPTIONS: tuple[ZeliaSensorEntityDescription, ...] = (
         options=list(PROD_STATE_MAP.values()),
         value_kind="prod_state",
     ),
+    # Raw prod_on code (0/1/2) for automations / diagnostics.
+    ZeliaSensorEntityDescription(
+        key="prod_on_code",
+        translation_key="prod_on_code",
+        mqtt_type="u8_r",
+        mqtt_name="prod_on",
+        qualifier="value",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        value_kind="number",
+    ),
     ZeliaSensorEntityDescription(
         key="rssi",
         translation_key="rssi",

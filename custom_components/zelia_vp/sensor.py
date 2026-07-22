@@ -59,3 +59,13 @@ class ZeliaSensor(ZeliaEntity, SensorEntity):
         if desc.value_kind == "firmware":
             return firmware_from_raw(raw)
         return apply_read_scale(raw, desc.scale)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, int | float] | None:
+        """Expose raw prod_on on the human-readable production state sensor."""
+        if self.entity_description.value_kind != "prod_state":
+            return None
+        raw = self._raw_number()
+        if raw is None:
+            return None
+        return {"prod_on_code": int(raw)}

@@ -72,9 +72,10 @@ def test_live_capture_scales() -> None:
 
 
 def test_prod_state_map() -> None:
-    assert helpers.prod_state_from_raw(0) == "stopped"
-    assert helpers.prod_state_from_raw(1) == "requested"
-    assert helpers.prod_state_from_raw(2) == "running"
+    # Live: prod_on=1 with prod_chlore=19 / current → producing, not "requested"
+    assert helpers.prod_state_from_raw(0) == "off"
+    assert helpers.prod_state_from_raw(1) == "on"
+    assert helpers.prod_state_from_raw(2) == "reverse"
     assert helpers.prod_state_from_raw(9) is None
     assert set(const.PROD_STATE_MAP) == {0, 1, 2}
 
@@ -109,7 +110,7 @@ def test_raw_store_interpretation_pipeline() -> None:
     store: dict[str, float | str] = {
         "value_temp": 285.0,
         "temp_min_off_ely": 150.0,
-        "prod_on": 2.0,
+        "prod_on": 1.0,
         "mode_ely": 2.0,
         "sw_vers": 832.0,
         "power_ely": 100.0,
@@ -117,7 +118,7 @@ def test_raw_store_interpretation_pipeline() -> None:
 
     assert helpers.apply_read_scale(float(store["value_temp"]), 0.1) == 28.5
     assert helpers.apply_read_scale(float(store["temp_min_off_ely"]), 0.1) == 15.0
-    assert helpers.prod_state_from_raw(float(store["prod_on"])) == "running"
+    assert helpers.prod_state_from_raw(float(store["prod_on"])) == "on"
     assert float(store["prod_on"]) > 0  # production_active
     assert helpers.mode_ely_from_raw(float(store["mode_ely"])) == "auto"
     assert helpers.firmware_from_raw(float(store["sw_vers"])) == "832"
