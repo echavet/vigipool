@@ -10,6 +10,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 from .coordinator import ZeliaCoordinator
 from .entity import ZeliaEntity
+from .helpers import (
+    apply_read_scale,
+    firmware_from_raw,
+    is_temp_sentinel,
+    prod_state_from_raw,
+)
 from .models import SENSOR_DESCRIPTIONS, ZeliaSensorEntityDescription
 
 PARALLEL_UPDATES = 0
@@ -41,13 +47,15 @@ class ZeliaSensor(ZeliaEntity, SensorEntity):
 
     @property
     def native_value(self):
-        """Return the sensor value."""
-        raw = self.coordinator.get_value(self.entity_description.key)
-        if self.entity_description.value_fn is not None:
-            # value_fn may expect already-scaled or enum raw depending on key
-            if self.entity_description.key == "prod_state":
-                return raw
-            if self.entity_description.key == "firmware":
-                return raw
-            return self.entity_description.value_fn(raw)
-        return raw
+        """Return scaled / mapped value from raw store + description."""
+        desc = self.entity_description
+        raw = self._raw_number()
+        if raw is None:
+            return None
+        if desc.reject_temp_sentinel and is_temp_sentinel(raw):
+            return None
+        if desc.value_kind == "prod_state":
+            return prod_state_from_raw(raw)
+        if desc.value_kind == "firmware":
+            return firmware_from_raw(raw)
+        return apply_read_scale(raw, desc.scale)

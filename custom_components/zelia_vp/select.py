@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -12,9 +10,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 from .coordinator import ZeliaCoordinator
 from .entity import ZeliaEntity
+from .helpers import mode_ely_from_raw
 from .models import SELECT_DESCRIPTIONS, ZeliaSelectEntityDescription
-
-_LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0
 
@@ -45,13 +42,8 @@ class ZeliaSelect(ZeliaEntity, SelectEntity):
 
     @property
     def current_option(self) -> str | None:
-        """Return the current mode option."""
-        value = self.coordinator.get_value(self.entity_description.key)
-        if value is None:
-            return None
-        if isinstance(value, str):
-            return value
-        return None
+        """Return the current mode option from raw mode_ely."""
+        return mode_ely_from_raw(self._raw_number())
 
     async def async_select_option(self, option: str) -> None:
         """Change electrolysis mode (and clear shock)."""

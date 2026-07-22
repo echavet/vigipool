@@ -1,10 +1,9 @@
-"""Declarative MQTT entity descriptions for Zelia VP."""
+"""Declarative MQTT entity descriptions and registry for Zelia VP."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -26,16 +25,8 @@ from homeassistant.const import (
     UnitOfTemperature,
     UnitOfTime,
 )
-from homeassistant.helpers.entity import EntityDescription
 
-from .const import MODE_ELY_OPTIONS
-from .helpers import (  # noqa: F401 — re-export for convenience
-    apply_scale,
-    build_topic,
-    is_temp_sentinel,
-    parse_numeric,
-    prod_state_value,
-)
+from .const import MODE_ELY_OPTIONS, PROD_STATE_MAP
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -47,14 +38,27 @@ class ZeliaMqttMixin:
     qualifier: str = "info"
     scale: float = 1.0
     write_scale: float = 1.0
-    # Key used in coordinator data store (defaults to entity description key).
+    # Treat raw >= 65530 as invalid (temperature-style sensors).
+    reject_temp_sentinel: bool = False
+
+    @property
+    def path(self) -> tuple[str, str, str]:
+        """Reported-topic path components."""
+        return (self.mqtt_type, self.mqtt_name, self.qualifier)
+
+    @property
+    def is_writable(self) -> bool:
+        """True if this topic accepts desired publishes."""
+        return self.mqtt_type.endswith("_w")
 
 
 @dataclass(frozen=True, kw_only=True)
 class ZeliaSensorEntityDescription(SensorEntityDescription, ZeliaMqttMixin):
     """Sensor description with MQTT mapping."""
 
-    value_fn: Callable[[float | None], Any] | None = None
+    # How to interpret the scaled numeric value for native_value.
+    # "number" | "prod_state" | "firmware"
+    value_kind: str = "number"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -82,14 +86,6 @@ class ZeliaSelectEntityDescription(SelectEntityDescription, ZeliaMqttMixin):
     option_map: dict[str, int]
 
 
-def temp_value(raw: float | None) -> float | None:
-    """Temperature with error sentinel handling (already scaled by description)."""
-    # Sentinel checked on raw before scale in coordinator; keep safe here.
-    if raw is None:
-        return None
-    return raw
-
-
 SENSOR_DESCRIPTIONS: tuple[ZeliaSensorEntityDescription, ...] = (
     ZeliaSensorEntityDescription(
         key="water_temp",
@@ -98,11 +94,11 @@ SENSOR_DESCRIPTIONS: tuple[ZeliaSensorEntityDescription, ...] = (
         mqtt_name="value_temp",
         qualifier="value",
         scale=0.1,
+        reject_temp_sentinel=True,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
-        value_fn=temp_value,
     ),
     ZeliaSensorEntityDescription(
         key="chlorine_prod",
@@ -180,6 +176,7 @@ SENSOR_DESCRIPTIONS: tuple[ZeliaSensorEntityDescription, ...] = (
         mqtt_name="value_temp_int",
         qualifier="value",
         scale=0.1,
+        reject_temp_sentinel=True,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -193,8 +190,8 @@ SENSOR_DESCRIPTIONS: tuple[ZeliaSensorEntityDescription, ...] = (
         mqtt_name="prod_on",
         qualifier="value",
         device_class=SensorDeviceClass.ENUM,
-        options=["stopped", "requested", "running"],
-        value_fn=prod_state_value,
+        options=list(PROD_STATE_MAP.values()),
+        value_kind="prod_state",
     ),
     ZeliaSensorEntityDescription(
         key="rssi",
@@ -224,7 +221,7 @@ SENSOR_DESCRIPTIONS: tuple[ZeliaSensorEntityDescription, ...] = (
         mqtt_name="sw_vers",
         qualifier="info",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda raw: None if raw is None else str(int(raw)),
+        value_kind="firmware",
     ),
     ZeliaSensorEntityDescription(
         key="cell_type",
@@ -247,6 +244,7 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[ZeliaBinarySensorEntityDescription, ...] = (
         qualifier="value",
         device_class=BinarySensorDeviceClass.RUNNING,
         on_if_gt=0.0,
+        on_value=None,
     ),
     ZeliaBinarySensorEntityDescription(
         key="flow",
@@ -314,6 +312,7 @@ NUMBER_DESCRIPTIONS: tuple[ZeliaNumberEntityDescription, ...] = (
         qualifier="info",
         scale=0.1,
         write_scale=10.0,
+        reject_temp_sentinel=True,
         native_min_value=10,
         native_max_value=25,
         native_step=0.5,
@@ -371,29 +370,23 @@ SELECT_DESCRIPTIONS: tuple[ZeliaSelectEntityDescription, ...] = (
 )
 
 
-def all_reported_suffixes() -> dict[str, tuple[str, str, str]]:
-    """Map entity key -> (mqtt_type, mqtt_name, qualifier) for reported topics."""
-    result: dict[str, tuple[str, str, str]] = {}
-    for desc in (
+def _all_descriptions() -> tuple[ZeliaMqttMixin, ...]:
+    return (
         *SENSOR_DESCRIPTIONS,
         *BINARY_SENSOR_DESCRIPTIONS,
         *NUMBER_DESCRIPTIONS,
         *SWITCH_DESCRIPTIONS,
         *SELECT_DESCRIPTIONS,
-    ):
-        result[desc.key] = (desc.mqtt_type, desc.mqtt_name, desc.qualifier)
-    return result
+    )
 
 
-def description_by_mqtt_name() -> dict[str, EntityDescription]:
-    """Index descriptions by mqtt_name (last write wins if duplicate keys)."""
-    index: dict[str, EntityDescription] = {}
-    for desc in (
-        *SENSOR_DESCRIPTIONS,
-        *BINARY_SENSOR_DESCRIPTIONS,
-        *NUMBER_DESCRIPTIONS,
-        *SWITCH_DESCRIPTIONS,
-        *SELECT_DESCRIPTIONS,
-    ):
-        index[desc.mqtt_name] = desc  # type: ignore[assignment]
-    return index
+def _build_by_key(
+    descriptions: Iterable[ZeliaMqttMixin],
+) -> dict[str, ZeliaMqttMixin]:
+    return {d.key: d for d in descriptions}  # type: ignore[attr-defined]
+
+
+DESCRIPTIONS_BY_KEY: dict[str, ZeliaMqttMixin] = _build_by_key(_all_descriptions())
+WRITABLE_DESCRIPTIONS: dict[str, ZeliaMqttMixin] = {
+    key: desc for key, desc in DESCRIPTIONS_BY_KEY.items() if desc.is_writable
+}

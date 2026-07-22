@@ -6,7 +6,6 @@ DOMAIN = "zelia_vp"
 MANUFACTURER = "CCEI"
 MODEL = "Zelia VP"
 
-# String platform names (resolved by HA config entries); no homeassistant import.
 PLATFORMS: list[str] = [
     "binary_sensor",
     "number",
@@ -22,7 +21,7 @@ DEFAULT_NAME = "Zelia VP"
 # Seconds without MQTT traffic before entities become unavailable.
 DEFAULT_AVAILABILITY_TIMEOUT = 600
 
-# Production state (prod_on) mapping.
+# Production state (prod_on) mapping — unknown values map to None at entity layer.
 PROD_STATE_MAP: dict[int, str] = {
     0: "stopped",
     1: "requested",
@@ -37,17 +36,3 @@ MODE_ELY_OPTIONS: dict[str, int] = {
     "regulated": 3,
 }
 MODE_ELY_REVERSE: dict[int, str] = {v: k for k, v in MODE_ELY_OPTIONS.items()}
-
-# Writable keys allowed for desired publishes (whitelist).
-WRITABLE_KEYS = frozenset(
-    {
-        "mode_ely",
-        "mode_choc",
-        "power_ely",
-        "ely_duration_theo",
-        "choc_duration",
-        "temp_min_off",
-        "consigne_orp",
-        "winter_mode",
-    }
-)

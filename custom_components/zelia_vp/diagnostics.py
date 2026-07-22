@@ -26,6 +26,5 @@ async def async_get_config_entry_diagnostics(
         "mqtt_connected": coordinator.mqtt.connected,
         "device_available": coordinator.device_available,
         "last_message_age": coordinator.last_message_age,
-        "data": coordinator.data,
-        "raw": coordinator._raw,  # noqa: SLF001 — diagnostics only
+        "raw_store": dict(coordinator.data),
     }

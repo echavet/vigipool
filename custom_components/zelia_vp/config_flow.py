@@ -50,7 +50,6 @@ class ZeliaVpConfigFlow(ConfigFlow, domain=DOMAIN):
                 device_id = normalize_device_id(user_input[CONF_DEVICE_ID])
             except ValueError:
                 errors["base"] = "invalid_device_id"
-                device_id = user_input.get(CONF_DEVICE_ID, "")
             else:
                 await self.async_set_unique_id(device_id)
                 self._abort_if_unique_id_configured()
@@ -99,7 +98,7 @@ class ZeliaVpOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manage options (host/port/name/timeout)."""
+        """Manage options (host/port/name/timeout). Reload via update listener."""
         errors: dict[str, str] = {}
         entry = self.config_entry
 
@@ -121,6 +120,7 @@ class ZeliaVpOptionsFlow(OptionsFlow):
             except Exception:  # noqa: BLE001
                 errors["base"] = "cannot_connect"
             else:
+                # Update entry; add_update_listener triggers a single reload.
                 self.hass.config_entries.async_update_entry(
                     entry,
                     title=name,
@@ -135,7 +135,6 @@ class ZeliaVpOptionsFlow(OptionsFlow):
                         "availability_timeout": timeout,
                     },
                 )
-                await self.hass.config_entries.async_reload(entry.entry_id)
                 return self.async_create_entry(title="", data={})
 
         data = entry.data

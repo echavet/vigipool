@@ -1,4 +1,4 @@
-"""Unit tests for topic building and value transforms (no Home Assistant required)."""
+"""Unit tests for pure helpers and raw-store interpretation (no Home Assistant)."""
 
 from __future__ import annotations
 
@@ -44,20 +44,45 @@ def test_build_topic() -> None:
     )
 
 
-def test_parse_and_scale_from_live_capture() -> None:
-    assert helpers.apply_scale(helpers.parse_numeric("285"), 0.1) == 28.5
-    assert helpers.apply_scale(helpers.parse_numeric("150"), 0.1) == 15.0
-    assert helpers.apply_scale(helpers.parse_numeric("32"), 0.1) == 3.2
-    assert helpers.apply_scale(helpers.parse_numeric("650"), 1.0) == 650.0
-    assert 15.0 * 10.0 == 150.0
+def test_parse_topic() -> None:
+    parsed = helpers.parse_topic(
+        "zelix_8C4B14821190/u16_r/value_temp/value/reported"
+    )
+    assert parsed == (
+        "zelix_8C4B14821190",
+        "u16_r",
+        "value_temp",
+        "value",
+        "reported",
+    )
+    assert helpers.parse_topic("too/short") is None
+
+
+def test_live_capture_scales() -> None:
+    # value_temp 285 -> 28.5 °C
+    assert helpers.apply_read_scale(helpers.parse_numeric("285"), 0.1) == 28.5
+    # temp_min_off 150 -> 15.0 °C
+    assert helpers.apply_read_scale(helpers.parse_numeric("150"), 0.1) == 15.0
+    # current_ely 32 -> 3.2 A
+    assert helpers.apply_read_scale(helpers.parse_numeric("32"), 0.1) == 3.2
+    # consigne_orp 650 mV (no scale)
+    assert helpers.apply_read_scale(helpers.parse_numeric("650"), 1.0) == 650.0
+    # write temp_min: 15.0 * 10 = 150
+    assert helpers.format_payload(15.0 * 10.0) == "150"
 
 
 def test_prod_state_map() -> None:
-    assert helpers.prod_state_value(0) == "stopped"
-    assert helpers.prod_state_value(1) == "requested"
-    assert helpers.prod_state_value(2) == "running"
-    assert helpers.prod_state_value(9) == "unknown_9"
+    assert helpers.prod_state_from_raw(0) == "stopped"
+    assert helpers.prod_state_from_raw(1) == "requested"
+    assert helpers.prod_state_from_raw(2) == "running"
+    assert helpers.prod_state_from_raw(9) is None
     assert set(const.PROD_STATE_MAP) == {0, 1, 2}
+
+
+def test_mode_ely_from_raw() -> None:
+    assert helpers.mode_ely_from_raw(0) == "off"
+    assert helpers.mode_ely_from_raw(2) == "auto"
+    assert helpers.mode_ely_from_raw(99) is None
 
 
 def test_temp_sentinel() -> None:
@@ -77,3 +102,22 @@ def test_mode_ely_options() -> None:
     assert const.MODE_ELY_OPTIONS["programmed"] == 1
     assert const.MODE_ELY_OPTIONS["auto"] == 2
     assert const.MODE_ELY_OPTIONS["regulated"] == 3
+
+
+def test_raw_store_interpretation_pipeline() -> None:
+    """Simulate coordinator raw store + entity-layer transforms."""
+    store: dict[str, float | str] = {
+        "value_temp": 285.0,
+        "temp_min_off_ely": 150.0,
+        "prod_on": 2.0,
+        "mode_ely": 2.0,
+        "sw_vers": 832.0,
+        "power_ely": 100.0,
+    }
+
+    assert helpers.apply_read_scale(float(store["value_temp"]), 0.1) == 28.5
+    assert helpers.apply_read_scale(float(store["temp_min_off_ely"]), 0.1) == 15.0
+    assert helpers.prod_state_from_raw(float(store["prod_on"])) == "running"
+    assert float(store["prod_on"]) > 0  # production_active
+    assert helpers.mode_ely_from_raw(float(store["mode_ely"])) == "auto"
+    assert helpers.firmware_from_raw(float(store["sw_vers"])) == "832"

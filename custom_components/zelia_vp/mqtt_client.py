@@ -5,12 +5,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from collections.abc import Awaitable, Callable
-from typing import Any
+from collections.abc import Callable
+
+import aiomqtt
 
 _LOGGER = logging.getLogger(__name__)
 
-MessageCallback = Callable[[str, str], Awaitable[None] | None]
+MessageCallback = Callable[[str, str], None]
 
 
 class ZeliaMqttClient:
@@ -30,7 +31,7 @@ class ZeliaMqttClient:
         self._client_id = f"ha-zelia-{device_id[-12:]}-{uuid.uuid4().hex[:8]}"
         self._stop = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
-        self._client: Any = None
+        self._publish_client: aiomqtt.Client | None = None
         self.connected = False
 
     async def start(self) -> None:
@@ -38,7 +39,9 @@ class ZeliaMqttClient:
         if self._task is not None:
             return
         self._stop.clear()
-        self._task = asyncio.create_task(self._run(), name=f"zelia_mqtt_{self._device_id}")
+        self._task = asyncio.create_task(
+            self._run(), name=f"zelia_mqtt_{self._device_id}"
+        )
 
     async def stop(self) -> None:
         """Stop the client and cancel background tasks."""
@@ -50,41 +53,28 @@ class ZeliaMqttClient:
             except asyncio.CancelledError:
                 pass
             self._task = None
-        await self._disconnect()
+        self._publish_client = None
         self.connected = False
 
     async def publish(self, topic: str, payload: str) -> None:
         """Publish a message if connected."""
-        client = self._client
+        client = self._publish_client
         if client is None or not self.connected:
             raise ConnectionError("MQTT client is not connected")
         await client.publish(topic, payload)
         _LOGGER.debug("Published %s = %s", topic, payload)
 
-    async def _disconnect(self) -> None:
-        client = self._client
-        self._client = None
-        if client is None:
-            return
-        try:
-            await client.__aexit__(None, None, None)
-        except Exception:  # noqa: BLE001 — best-effort disconnect
-            _LOGGER.debug("Error while disconnecting MQTT client", exc_info=True)
-
     async def _run(self) -> None:
-        """Connect loop with exponential backoff."""
-        import aiomqtt
-
+        """Connect loop with exponential backoff. Context manager owns disconnect."""
         delay = 1.0
         while not self._stop.is_set():
             try:
-                client = aiomqtt.Client(
+                async with aiomqtt.Client(
                     hostname=self._host,
                     port=self._port,
                     identifier=self._client_id,
-                )
-                self._client = client
-                async with client:
+                ) as client:
+                    self._publish_client = client
                     self.connected = True
                     delay = 1.0
                     topic = f"{self._device_id}/#"
@@ -103,14 +93,11 @@ class ZeliaMqttClient:
                             text = payload.decode("utf-8", errors="replace")
                         else:
                             text = str(payload)
-                        result = self._on_message(str(message.topic), text)
-                        if asyncio.iscoroutine(result):
-                            await result
+                        # Same event loop as HA (task created from setup).
+                        self._on_message(str(message.topic), text)
             except asyncio.CancelledError:
                 raise
             except Exception as err:  # noqa: BLE001 — reconnect on any MQTT error
-                self.connected = False
-                self._client = None
                 if self._stop.is_set():
                     break
                 _LOGGER.warning(
@@ -127,8 +114,7 @@ class ZeliaMqttClient:
                 delay = min(delay * 2, 60.0)
             finally:
                 self.connected = False
-
-        await self._disconnect()
+                self._publish_client = None
 
 
 async def validate_mqtt_connection(
@@ -140,11 +126,9 @@ async def validate_mqtt_connection(
     """
     Try connecting to the broker.
 
-    Returns the first matching device_id seen if device_id is None and messages arrive,
-    or the provided device_id if connection succeeds. Raises on failure.
+    Connection success is enough for config flow (device may be quiet).
+    If messages arrive for a zelix_ prefix, return that device_id.
     """
-    import aiomqtt
-
     seen: list[str] = []
     client_id = f"ha-zelia-validate-{uuid.uuid4().hex[:8]}"
 
@@ -158,7 +142,6 @@ async def validate_mqtt_connection(
                 await client.subscribe(f"{device_id}/#")
             else:
                 await client.subscribe("zelix_#")
-            # Brief wait for retained/live traffic proves the path works.
             try:
                 async with asyncio.timeout(min(3.0, timeout)):
                     async for message in client.messages:
@@ -169,7 +152,6 @@ async def validate_mqtt_connection(
                             if device_id is None or prefix == device_id:
                                 return prefix
             except TimeoutError:
-                # Connection succeeded even without messages (device quiet).
                 return device_id
 
     return device_id if device_id else (seen[0] if seen else None)

@@ -43,23 +43,12 @@ class ZeliaBinarySensor(ZeliaEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool | None:
         """Return true if the binary sensor is on."""
-        value = self.coordinator.get_value(self.entity_description.key)
-        if value is None:
-            # Fallback to raw numeric for shared topics.
-            if self.entity_description.key == "production_active":
-                raw = self.coordinator.get_value("prod_on_raw")
-                if raw is None:
-                    return None
-                return raw > 0
+        raw = self._raw_number()
+        if raw is None:
             return None
-        if isinstance(value, bool):
-            return value
-        try:
-            num = float(value)
-        except (TypeError, ValueError):
-            return None
-        if self.entity_description.on_if_gt is not None:
-            return num > self.entity_description.on_if_gt
-        if self.entity_description.on_value is not None:
-            return num == self.entity_description.on_value
-        return bool(num)
+        desc = self.entity_description
+        if desc.on_if_gt is not None:
+            return raw > desc.on_if_gt
+        if desc.on_value is not None:
+            return raw == desc.on_value
+        return bool(raw)

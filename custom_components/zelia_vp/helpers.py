@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import re
 
-from .const import PROD_STATE_MAP
+from .const import MODE_ELY_REVERSE, PROD_STATE_MAP
 
 DEVICE_ID_RE_SUFFIX = re.compile(r"^[0-9A-F]{12}$")
+
+# Device error sentinels for temperature-like u16 values.
+TEMP_SENTINEL_MIN = 65530
 
 
 def build_topic(
@@ -14,6 +17,18 @@ def build_topic(
 ) -> str:
     """Build a full MQTT topic for a Zelia device."""
     return f"{device_id}/{mqtt_type}/{name}/{qualifier}/{direction}"
+
+
+def parse_topic(topic: str) -> tuple[str, str, str, str, str] | None:
+    """
+    Parse device_id / type / name / qualifier / direction.
+
+    Returns None if the topic shape is unexpected.
+    """
+    parts = topic.split("/")
+    if len(parts) < 5:
+        return None
+    return parts[0], parts[1], parts[2], parts[3], parts[4]
 
 
 def parse_numeric(payload: str) -> float | None:
@@ -27,29 +42,55 @@ def parse_numeric(payload: str) -> float | None:
         return None
 
 
-def apply_scale(value: float | None, scale: float) -> float | None:
-    """Apply a read scale factor."""
-    if value is None:
+def apply_read_scale(raw: float | None, scale: float) -> float | None:
+    """Apply a read scale factor to a raw numeric value."""
+    if raw is None:
         return None
     if scale == 1.0:
-        return value
-    return value * scale
+        return raw
+    return raw * scale
 
 
 def is_temp_sentinel(raw: float | None) -> bool:
     """Return True if the raw temperature value is a device error sentinel."""
-    return raw is not None and raw >= 65530
+    return raw is not None and raw >= TEMP_SENTINEL_MIN
 
 
-def prod_state_value(raw: float | None) -> str | None:
-    """Map prod_on numeric value to a translation key."""
+def format_payload(value: float | int) -> str:
+    """Format a numeric value as a Zelia MQTT payload string."""
+    if float(value).is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def prod_state_from_raw(raw: float | None) -> str | None:
+    """Map prod_on raw value to enum option; unknown → None."""
     if raw is None:
         return None
     try:
-        ivalue = int(raw)
+        return PROD_STATE_MAP.get(int(raw))
     except (TypeError, ValueError):
         return None
-    return PROD_STATE_MAP.get(ivalue, f"unknown_{ivalue}")
+
+
+def mode_ely_from_raw(raw: float | None) -> str | None:
+    """Map mode_ely raw value to select option."""
+    if raw is None:
+        return None
+    try:
+        return MODE_ELY_REVERSE.get(int(raw))
+    except (TypeError, ValueError):
+        return None
+
+
+def firmware_from_raw(raw: float | None) -> str | None:
+    """Map sw_vers raw value to a firmware string."""
+    if raw is None:
+        return None
+    try:
+        return str(int(raw))
+    except (TypeError, ValueError):
+        return None
 
 
 def normalize_device_id(value: str) -> str:

@@ -8,13 +8,15 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MANUFACTURER, MODEL
 from .coordinator import ZeliaCoordinator
-from .helpers import mac_from_device_id
+from .helpers import firmware_from_raw, mac_from_device_id
+from .models import ZeliaMqttMixin
 
 
 class ZeliaEntity(CoordinatorEntity[ZeliaCoordinator]):
     """Base class for all Zelia entities."""
 
     _attr_has_entity_name = True
+    entity_description: EntityDescription
 
     def __init__(
         self,
@@ -24,6 +26,7 @@ class ZeliaEntity(CoordinatorEntity[ZeliaCoordinator]):
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{coordinator.device_id}_{description.key}"
+
         connections: set[tuple[str, str]] = set()
         mac = mac_from_device_id(coordinator.device_id)
         if mac:
@@ -36,21 +39,19 @@ class ZeliaEntity(CoordinatorEntity[ZeliaCoordinator]):
             manufacturer=MANUFACTURER,
             model=MODEL,
             name=name,
-            sw_version=coordinator.get_value("firmware"),
+            sw_version=firmware_from_raw(coordinator.get_raw_number("sw_vers")),
             configuration_url="https://www.ccei-pool.com/fr/produit/zelia-vp",
         )
 
     @property
     def available(self) -> bool:
-        """Return True if the device is considered online."""
+        """Return True if we have recent MQTT data."""
         return self.coordinator.device_available
 
-    def _handle_coordinator_update(self) -> None:
-        """Refresh device firmware when available."""
-        fw = self.coordinator.get_value("firmware")
-        if fw and self.device_info is not None:
-            # device_info is frozen in practice; update via registry happens
-            # through HA when sw_version changes on DeviceInfo at creation.
-            # Keep entity state updates only here.
-            pass
-        super()._handle_coordinator_update()
+    def _mqtt_desc(self) -> ZeliaMqttMixin:
+        """Cast entity_description to MQTT mixin (all Zelia descs have it)."""
+        return self.entity_description  # type: ignore[return-value]
+
+    def _raw_number(self) -> float | None:
+        """Raw numeric value for this entity's mqtt_name."""
+        return self.coordinator.get_raw_number(self._mqtt_desc().mqtt_name)

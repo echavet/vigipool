@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -13,8 +11,6 @@ from .const import DOMAIN
 from .coordinator import ZeliaCoordinator
 from .entity import ZeliaEntity
 from .models import SWITCH_DESCRIPTIONS, ZeliaSwitchEntityDescription
-
-_LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0
 
@@ -46,15 +42,10 @@ class ZeliaSwitch(ZeliaEntity, SwitchEntity):
     @property
     def is_on(self) -> bool | None:
         """Return true if switch is on."""
-        value = self.coordinator.get_value(self.entity_description.key)
-        if value is None:
+        raw = self._raw_number()
+        if raw is None:
             return None
-        if isinstance(value, bool):
-            return value
-        try:
-            return float(value) == 1
-        except (TypeError, ValueError):
-            return None
+        return raw == 1
 
     async def async_turn_on(self, **kwargs) -> None:
         """Turn the switch on."""
