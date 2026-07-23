@@ -56,7 +56,7 @@
         "state": {
           "off": "Arrêtée",
           "on": "En production",
-          "reverse": "Inversion de polarité"
+          "reverse": "Inversion de polarité (nettoyage)"
         }
       },
       "prod_on_code": { "name": "Code production (prod_on)" },

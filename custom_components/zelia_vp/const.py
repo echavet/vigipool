@@ -22,9 +22,11 @@ DEFAULT_NAME = "Zelia VP"
 DEFAULT_AVAILABILITY_TIMEOUT = 600
 
 # Production state (prod_on).
-# Evidence (live + Jeedom): 0 = off, 1 = producing.
-# Value 2 also coincides with cell current/voltage (not "requested"); treated as
-# reverse-polarity / self-clean phase (common on salt cells; not officially documented).
+# Field-confirmed on Zelia VP (~24 h observation, ~2 h alternation between 1 and 2):
+#   0 = off (no production)
+#   1 = producing (forward polarity)
+#   2 = polarity reverse / electrode self-clean (still producing)
+# Jeedom only documents 0/1; CDC "requested" for 1 was wrong.
 # Unknown codes → None (enum stays strict).
 PROD_STATE_MAP: dict[int, str] = {
     0: "off",

@@ -15,4 +15,4 @@ Voir aussi `tests/fixtures/mqtt_zelix_sample.txt`.
 | `…/u16_r/current_ely/value/reported` | `32` | 3,2 A |
 | `…/u16_w/consigne_orp/info/reported` | `650` | 650 mV |
 | `…/u8_w/mode_ely/info/reported` | `2` | Auto |
-| `…/u8_r/prod_on/value/reported` | `0` ou `2` | Arrêtée / En cours |
+| `…/u8_r/prod_on/value/reported` | `0`, `1` ou `2` | 0=arrêt, 1=prod. polarité N, 2=inversion (~2 h d’alternance avec 1) |

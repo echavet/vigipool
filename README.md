@@ -68,7 +68,7 @@ Détails : [docs/ENTITIES.md](docs/ENTITIES.md)
 
 - La production ne se fait que s’il y a du **débit** (`flow_on`).
 - La durée théorique est un **budget journalier** d’heures d’équivalent pleine puissance.
-- L’**inversion de polarité** est gérée en interne par la Zelia — jamais pilotée par cette intégration.
+- L’**inversion de polarité** est gérée en interne par la Zelia (visible via `prod_on` 1↔2, ~toutes les 2 h) — jamais pilotée par cette intégration.
 - Mode **Choc** : production forcée (puissance jusqu’à 125 % côté appareil).
 
 ## Développement

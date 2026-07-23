@@ -56,7 +56,7 @@
         "state": {
           "off": "Off",
           "on": "Producing",
-          "reverse": "Polarity reverse"
+          "reverse": "Polarity reverse (self-clean)"
         }
       },
       "prod_on_code": { "name": "Production code (prod_on)" },

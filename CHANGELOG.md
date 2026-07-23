@@ -2,7 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assistant Core), e.g. `2026.7.23`.
+Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assistant Core), e.g. `2026.7.24`.
+
+## [2026.7.24] - 2026-07-23
+
+### Changed
+
+- **`prod_on` value 2 confirmed as polarity reverse** after ~24 h field use: regular alternation **~2 h** between codes `1` (forward production) and `2` (reverse / electrode self-clean). Labels and docs no longer mark this as a hypothesis.
 
 ## [2026.7.23] - 2026-07-22
 
@@ -22,7 +28,7 @@ Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assist
 ### Notes
 
 - Functionally equivalent to **0.2.1** (prod_on mapping fix included):
-  - `prod_on`: `0=off`, `1=on` (producing), `2=reverse` (polarity reverse hypothesis)
+  - `prod_on`: `0=off`, `1=on` (producing), `2=reverse` (polarity reverse; later field-confirmed)
   - Diagnostic sensor + attribute for raw `prod_on` code
   - Raw MQTT store architecture from 0.2.0
 
@@ -33,7 +39,7 @@ Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assist
 - **Production state (`prod_on`)** mapping was wrong (CDC “0/1/2 = Arrêtée/Demandée/En cours”).
   - Live check: `prod_on=1` with `prod_chlore=19` and cell current → **producing**, not “requested”.
   - Jeedom only maps `0=stopped`, `1=on` (never “requested”).
-  - New mapping: `0=off`, `1=on`, `2=reverse` (polarity reverse / self-clean **hypothesis**).
+  - New mapping: `0=off`, `1=on`, `2=reverse` (polarity reverse / self-clean; field-confirmed in 2026.7.24).
 - Added diagnostic sensor **Production code** (`prod_on` raw 0/1/2) and attribute `prod_on_code` on the state enum.
 - Binary **Production active** unchanged (`prod_on > 0`).
 
@@ -66,6 +72,7 @@ Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assist
 - Sensors, binary sensors, numbers, switches, select (electrolysis mode).
 - French and English translations, diagnostics, unit tests.
 
+[2026.7.24]: https://github.com/echavet/vigipool/releases/tag/2026.7.24
 [2026.7.23]: https://github.com/echavet/vigipool/releases/tag/2026.7.23
 [2026.7.22]: https://github.com/echavet/vigipool/releases/tag/2026.7.22
 [0.2.1]: https://github.com/echavet/vigipool/releases/tag/v0.2.1
