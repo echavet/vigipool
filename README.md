@@ -60,7 +60,7 @@ Pas d’authentification MQTT sur le firmware observé.
 | Switch | Mode hiver, Mode choc |
 | Number | Puissance, durée théorique, durée choc, temp. min arrêt, consigne ORP |
 | Sensor | Temp. eau, prod. chlore, état production, conductivité, diag. |
-| Binary | Production active, débit, couvercle |
+| Binary | Production active, débit, couverture de piscine |
 
 Détails : [docs/ENTITIES.md](docs/ENTITIES.md)
 

@@ -2,7 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
-Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assistant Core), e.g. `2026.7.24`.
+Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assistant Core), e.g. `2026.7.25`.
+
+## [2026.7.25] - 2026-07-24
+
+### Changed
+
+- **`ely_duration_compensated`** enabled by default (was diagnostic/disabled): target thermoregulated production duration in minutes — useful to detect when the cell should be producing.
+- Rename FR/EN labels: current vs target production duration.
+- **`couv_on`**: label corrected from “couvercle” to **couverture de piscine** (pool cover/blanket).
+- Docs: side power switch **100% / 25% / EXT** explained from official Zelia manual (EXT = external cover dry-contact detection).
 
 ## [2026.7.24] - 2026-07-23
 
@@ -72,6 +81,7 @@ Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assist
 - Sensors, binary sensors, numbers, switches, select (electrolysis mode).
 - French and English translations, diagnostics, unit tests.
 
+[2026.7.25]: https://github.com/echavet/vigipool/releases/tag/2026.7.25
 [2026.7.24]: https://github.com/echavet/vigipool/releases/tag/2026.7.24
 [2026.7.23]: https://github.com/echavet/vigipool/releases/tag/2026.7.23
 [2026.7.22]: https://github.com/echavet/vigipool/releases/tag/2026.7.22

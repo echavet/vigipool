@@ -155,8 +155,7 @@ SENSOR_DESCRIPTIONS: tuple[ZeliaSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfTime.MINUTES,
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.MEASUREMENT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
+        # Target daily production after thermoregulation (useful vs actual production).
         suggested_display_precision=0,
     ),
     ZeliaSensorEntityDescription(

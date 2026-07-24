@@ -35,8 +35,8 @@ Préfixe MQTT : `{device_id}/…` (ex. `zelix_8C4B14821190`)
 | Production chlore | `u8_r/prod_chlore/value/reported` | — | g/h |
 | Tension | `u16_r/voltage_ely/value/reported` | — | V |
 | Courant | `u16_r/current_ely/value/reported` | ÷10 | A |
-| Durée production | `u16_r/ely_duration_in_minut/value/reported` | — | min |
-| Durée compensée | `u16_r/ely_duration_compensated/value/reported` | — | min |
+| Durée production actuelle | `u16_r/ely_duration_in_minut/value/reported` | — | min (déjà produit / en cours) |
+| Durée production cible (thermorégulée) | `u16_r/ely_duration_compensated/value/reported` | — | min (objectif journalier après compensation temp., ex. 1482 ≈ 24 h 42) |
 | Conductivité | `u16_r/value_cond/value/reported` | — | mS/cm |
 | Temp. interne | `u16_r/value_temp_int/value/reported` | ÷10 | °C |
 | État production | `u8_r/prod_on/value/reported` | 0→off, 1→on, 2→reverse | enum |
@@ -59,10 +59,28 @@ Jeedom n’expose que 0/1 ; le CDC « Demandée / En cours » était incorrect.
 Le binary sensor **Production active** reste `prod_on > 0` (codes 1 et 2).  
 L’enum expose aussi l’attribut `prod_on_code` (et un capteur diagnostic dédié).
 
+### Durées d’électrolyse
+
+| Capteur | Sens |
+|---------|------|
+| **Durée de production actuelle** (`ely_duration_in_minut`) | Temps d’électrolyse déjà réalisé / en cours (minutes) |
+| **Durée de production cible** (`ely_duration_compensated`) | Objectif journalier **thermorégulé** en minutes (durée théorique modulée par la température de l’eau). Utile pour détecter une cellule qui **devrait** produire mais ne le fait pas (ex. comparer avec production actuelle, `flow_on`, `prod_on`, mode). |
+| **Durée théorique** (number, heures) | Consigne utilisateur 1–24 h avant compensation température |
+
+### Interrupteur latéral du boîtier d’alimentation (doc Zelia)
+
+| Position | Signification |
+|----------|----------------|
+| **100 %** | Production nominale **forcée** — ignore l’état couverture / contact volet |
+| **25 %** | Production réduite à **1/4** (mode couverture manuel) — ignore aussi le contact si présent |
+| **EXT** | **Externe** : lit le **contact sec de couverture automatique** (et/ou asservissement RedOx en mode PA). Le coffret détecte alors volet fermé/ouvert pour réduire ou non la production. |
+
+Sans contact câblé, on peut simuler « bassin couvert » en mettant **25 %**, puis repasser manuellement en **100 %**.
+
 ## Binary sensors
 
 | Entité | Topic | On si |
 |--------|-------|-------|
 | Production active | `prod_on` | > 0 |
 | Débit | `flow_on` | == 1 |
-| Couvercle | `couv_on` | == 1 |
+| Couverture de piscine | `couv_on` | == 1 (bassin couvert) |

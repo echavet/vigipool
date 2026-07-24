@@ -47,8 +47,8 @@
       "chlorine_prod": { "name": "Chlorine production" },
       "voltage_ely": { "name": "Electrolysis voltage" },
       "current_ely": { "name": "Electrolysis current" },
-      "ely_duration_min": { "name": "Production duration" },
-      "ely_duration_compensated": { "name": "Compensated duration" },
+      "ely_duration_min": { "name": "Current production duration" },
+      "ely_duration_compensated": { "name": "Target production duration (thermoregulated)" },
       "conductivity": { "name": "Conductivity" },
       "internal_temp": { "name": "Internal temperature" },
       "prod_state": {
@@ -68,7 +68,7 @@
     "binary_sensor": {
       "production_active": { "name": "Production active" },
       "flow": { "name": "Flow detected" },
-      "cover": { "name": "Pool cover" }
+      "cover": { "name": "Pool cover (blanket)" }
     },
     "number": {
       "power_ely": { "name": "Production power" },
