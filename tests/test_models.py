@@ -98,6 +98,36 @@ def test_normalize_device_id() -> None:
     assert helpers.normalize_device_id("8c:4b:14:82:11:90") == "zelix_8C4B14821190"
 
 
+def test_error_bitmask_e14() -> None:
+    # Live 2026-08-16: MQTT 16384 + Vigipool app E14 (taux de sel trop élevé)
+    assert const.ERROR_MASK_HIGH_SALT == 16384
+    assert const.ERROR_MASK_HIGH_SALT == 1 << 14
+    assert helpers.error_bits_from_raw(16384) == [14]
+    assert helpers.error_bits_from_raw(16384.0) == [14]
+    assert helpers.error_e_codes_from_raw(16384) == ["E14"]
+    assert helpers.error_e_codes_state_from_raw(16384) == "E14"
+    assert helpers.error_e_codes_state_from_raw(0) == "none"
+    assert helpers.error_e_codes_from_raw(0) == []
+    assert helpers.error_e_codes_state_from_raw(None) is None
+    assert helpers.error_attributes_from_raw(None) is None
+    attrs = helpers.error_attributes_from_raw(16384)
+    assert attrs is not None
+    assert attrs["error_hex"] == "0x4000"
+    assert attrs["error_bits"] == [14]
+    assert attrs["e_codes"] == ["E14"]
+    assert attrs["labels"] == ["high_salt"]
+    assert attrs["high_salt"] is True
+    # Combined bits: En = bit n
+    assert helpers.error_e_codes_state_from_raw((1 << 2) | 16384) == "E2+E14"
+    none_attrs = helpers.error_attributes_from_raw(0)
+    assert none_attrs is not None
+    assert none_attrs["high_salt"] is False
+    assert none_attrs["e_codes"] == []
+    # 13384 is not 1<<14; it must not decode as a lone E14.
+    assert helpers.error_e_codes_state_from_raw(13384) != "E14"
+    assert 14 not in helpers.error_bits_from_raw(13384)
+
+
 def test_mode_ely_options() -> None:
     assert const.MODE_ELY_OPTIONS["off"] == 0
     assert const.MODE_ELY_OPTIONS["programmed"] == 1

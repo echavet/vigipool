@@ -59,8 +59,8 @@ Pas d’authentification MQTT sur le firmware observé.
 | Select | Mode électrolyse (Arrêt / Programmé / Auto / Régulé) |
 | Switch | Mode hiver, Mode choc |
 | Number | Puissance, durée théorique, durée choc, temp. min arrêt, consigne ORP |
-| Sensor | Temp. eau, prod. chlore, état production, conductivité, diag. |
-| Binary | Production active, débit, couverture de piscine |
+| Sensor | Temp. eau, prod. chlore, état production, conductivité, code erreur (brut + E14), diag. |
+| Binary | Production active, débit, couverture de piscine, défaut |
 
 Détails : [docs/ENTITIES.md](docs/ENTITIES.md)
 
@@ -69,6 +69,7 @@ Détails : [docs/ENTITIES.md](docs/ENTITIES.md)
 - La production ne se fait que s’il y a du **débit** (`flow_on`).
 - La durée théorique est un **budget journalier** d’heures d’équivalent pleine puissance.
 - L’**inversion de polarité** est gérée en interne par la Zelia (visible via `prod_on` 1↔2, ~toutes les 2 h) — jamais pilotée par cette intégration.
+- **Code erreur** : registre 32 bits ; `16384` = **E14** (taux de sel trop élevé). Détails : [docs/ENTITIES.md](docs/ENTITIES.md).
 - Mode **Choc** : production forcée (puissance jusqu’à 125 % côté appareil).
 
 ## Développement

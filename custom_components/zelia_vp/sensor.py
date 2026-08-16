@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -12,6 +14,8 @@ from .coordinator import ZeliaCoordinator
 from .entity import ZeliaEntity
 from .helpers import (
     apply_read_scale,
+    error_attributes_from_raw,
+    error_e_codes_state_from_raw,
     firmware_from_raw,
     is_temp_sentinel,
     prod_state_from_raw,
@@ -58,14 +62,19 @@ class ZeliaSensor(ZeliaEntity, SensorEntity):
             return prod_state_from_raw(raw)
         if desc.value_kind == "firmware":
             return firmware_from_raw(raw)
+        if desc.value_kind == "error_e_codes":
+            return error_e_codes_state_from_raw(raw)
         return apply_read_scale(raw, desc.scale)
 
     @property
-    def extra_state_attributes(self) -> dict[str, int | float] | None:
-        """Expose raw prod_on on the human-readable production state sensor."""
-        if self.entity_description.value_kind != "prod_state":
-            return None
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Expose raw codes and decoded error bits."""
+        kind = self.entity_description.value_kind
         raw = self._raw_number()
         if raw is None:
             return None
-        return {"prod_on_code": int(raw)}
+        if kind == "prod_state":
+            return {"prod_on_code": int(raw)}
+        if kind in ("error_raw", "error_e_codes"):
+            return error_attributes_from_raw(raw)
+        return None

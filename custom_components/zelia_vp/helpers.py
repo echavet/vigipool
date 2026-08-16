@@ -3,8 +3,15 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
-from .const import MODE_ELY_REVERSE, PROD_STATE_MAP
+from .const import (
+    ERROR_BIT_HIGH_SALT,
+    ERROR_BIT_LABELS,
+    ERROR_NONE,
+    MODE_ELY_REVERSE,
+    PROD_STATE_MAP,
+)
 
 DEVICE_ID_RE_SUFFIX = re.compile(r"^[0-9A-F]{12}$")
 
@@ -91,6 +98,59 @@ def firmware_from_raw(raw: float | None) -> str | None:
         return str(int(raw))
     except (TypeError, ValueError):
         return None
+
+
+def _error_int(raw: float | int | None) -> int | None:
+    """Coerce the u32 error register to an unsigned 32-bit int."""
+    if raw is None:
+        return None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return value & 0xFFFFFFFF
+
+
+def error_bits_from_raw(raw: float | int | None) -> list[int] | None:
+    """Return set bit indices (0–31) of the u32 error register."""
+    value = _error_int(raw)
+    if value is None:
+        return None
+    return [bit for bit in range(32) if value & (1 << bit)]
+
+
+def error_e_codes_from_raw(raw: float | int | None) -> list[str] | None:
+    """Map set bits to Vigipool app codes (bit n → En)."""
+    bits = error_bits_from_raw(raw)
+    if bits is None:
+        return None
+    return [f"E{bit}" for bit in bits]
+
+
+def error_e_codes_state_from_raw(raw: float | int | None) -> str | None:
+    """Human-readable error state: none, E14, or E2+E14."""
+    codes = error_e_codes_from_raw(raw)
+    if codes is None:
+        return None
+    if not codes:
+        return ERROR_NONE
+    return "+".join(codes)
+
+
+def error_attributes_from_raw(raw: float | int | None) -> dict[str, Any] | None:
+    """Extra attributes for the raw and decoded error sensors."""
+    value = _error_int(raw)
+    if value is None:
+        return None
+    bits = [bit for bit in range(32) if value & (1 << bit)]
+    labels = [ERROR_BIT_LABELS[bit] for bit in bits if bit in ERROR_BIT_LABELS]
+    return {
+        "error_hex": f"0x{value:X}",
+        "error_bits": bits,
+        "e_codes": [f"E{bit}" for bit in bits],
+        "labels": labels,
+        "high_salt": ERROR_BIT_HIGH_SALT in bits,
+    }
 
 
 def normalize_device_id(value: str) -> str:

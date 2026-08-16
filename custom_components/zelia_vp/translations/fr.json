@@ -62,13 +62,15 @@
       "prod_on_code": { "name": "Code production (prod_on)" },
       "rssi": { "name": "RSSI" },
       "error": { "name": "Code erreur" },
+      "error_e_codes": { "name": "Code erreur Vigipool" },
       "firmware": { "name": "Firmware" },
       "cell_type": { "name": "Type de cellule" }
     },
     "binary_sensor": {
       "production_active": { "name": "Production active" },
       "flow": { "name": "Débit détecté" },
-      "cover": { "name": "Couverture de piscine" }
+      "cover": { "name": "Couverture de piscine" },
+      "fault": { "name": "Défaut" }
     },
     "number": {
       "power_ely": { "name": "Puissance de production" },

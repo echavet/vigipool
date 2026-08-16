@@ -57,7 +57,7 @@ class ZeliaSensorEntityDescription(SensorEntityDescription, ZeliaMqttMixin):
     """Sensor description with MQTT mapping."""
 
     # How to interpret the scaled numeric value for native_value.
-    # "number" | "prod_state" | "firmware"
+    # "number" | "prod_state" | "firmware" | "error_raw" | "error_e_codes"
     value_kind: str = "number"
 
 
@@ -224,6 +224,16 @@ SENSOR_DESCRIPTIONS: tuple[ZeliaSensorEntityDescription, ...] = (
         qualifier="info",
         entity_category=EntityCategory.DIAGNOSTIC,
         suggested_display_precision=0,
+        value_kind="error_raw",
+    ),
+    ZeliaSensorEntityDescription(
+        key="error_e_codes",
+        translation_key="error_e_codes",
+        mqtt_type="u32_r",
+        mqtt_name="error",
+        qualifier="info",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_kind="error_e_codes",
     ),
     ZeliaSensorEntityDescription(
         key="firmware",
@@ -272,6 +282,16 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[ZeliaBinarySensorEntityDescription, ...] = (
         mqtt_name="couv_on",
         qualifier="value",
         on_value=1.0,
+    ),
+    ZeliaBinarySensorEntityDescription(
+        key="fault",
+        translation_key="fault",
+        mqtt_type="u32_r",
+        mqtt_name="error",
+        qualifier="info",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        on_if_gt=0.0,
+        on_value=None,
     ),
 )
 

@@ -2,7 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
-Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assistant Core), e.g. `2026.7.25`.
+Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assistant Core), e.g. `2026.8.16`.
+
+## [2026.8.16] - 2026-08-16
+
+### Added
+
+- **Error bitmask decoding** for `u32_r/error` (Vigipool app `En` = bit `n`).
+  - Field-confirmed: **16384 (`1<<14`) = E14** — *Taux de sel trop élevé* / high current / too much salt (MQTT + app notification, same night as a 40 % power reduction).
+  - Sensor **Code erreur Vigipool** (`error_e_codes`): state `none`, `E14`, or `E2+E14` if several bits are set.
+  - Attributes on both error sensors: `error_hex`, `error_bits`, `e_codes`, `labels`, `high_salt`.
+  - Binary sensor **Défaut** (`fault`, device class `problem`) when the register is non-zero.
+  - Raw numeric **Code erreur** unchanged for existing automations.
+
+### Notes
+
+- Other bits are exposed as `En` without a label until independently confirmed.
+- E14 can fire as a **false positive** when production power is forced well below ~60 % (current vs expected not scaled in firmware).
 
 ## [2026.7.25] - 2026-07-24
 
@@ -81,6 +97,7 @@ Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assist
 - Sensors, binary sensors, numbers, switches, select (electrolysis mode).
 - French and English translations, diagnostics, unit tests.
 
+[2026.8.16]: https://github.com/echavet/vigipool/releases/tag/2026.8.16
 [2026.7.25]: https://github.com/echavet/vigipool/releases/tag/2026.7.25
 [2026.7.24]: https://github.com/echavet/vigipool/releases/tag/2026.7.24
 [2026.7.23]: https://github.com/echavet/vigipool/releases/tag/2026.7.23

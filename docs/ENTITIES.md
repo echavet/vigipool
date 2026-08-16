@@ -42,7 +42,8 @@ Préfixe MQTT : `{device_id}/…` (ex. `zelix_8C4B14821190`)
 | État production | `u8_r/prod_on/value/reported` | 0→off, 1→on, 2→reverse | enum |
 | Code production | `u8_r/prod_on/value/reported` | brut 0/1/2 | diagnostic |
 | RSSI | `i8_r/rssi/info/reported` | — | dBm |
-| Erreur | `u32_r/error/info/reported` | — | — |
+| Erreur | `u32_r/error/info/reported` | bitmask brut | — |
+| Code erreur Vigipool | `u32_r/error/info/reported` | bits → `En` | `none` / `E14` / `E2+E14` |
 | Firmware | `u16_r/sw_vers/info/reported` | str | — |
 | Type cellule | `u8_r/cell_type/value/reported` | — | — |
 
@@ -58,6 +59,31 @@ Jeedom n’expose que 0/1 ; le CDC « Demandée / En cours » était incorrect.
 
 Le binary sensor **Production active** reste `prod_on > 0` (codes 1 et 2).  
 L’enum expose aussi l’attribut `prod_on_code` (et un capteur diagnostic dédié).
+
+### Registre d’erreur (`u32_r/error`)
+
+Masque 32 bits. **Code application Vigipool `En` = bit `n`.**
+
+| Valeur MQTT | Bit | Code app | Signification | Confirmé |
+|-------------|-----|----------|---------------|----------|
+| `0` | — | `none` | Pas de défaut | oui |
+| `16384` (`0x4000`) | 14 | **E14** | Courant trop fort / **taux de sel trop élevé** | **oui** (2026-08-16 : MQTT + notification app simultanée) |
+
+Bits non listés : l’état affiche quand même `En` (ex. `E2`), attributs `labels` vides, `high_salt: false`.
+
+Attributs (`error` et `error_e_codes`) :
+
+| Attribut | Exemple (E14) |
+|----------|----------------|
+| `error_hex` | `0x4000` |
+| `error_bits` | `[14]` |
+| `e_codes` | `["E14"]` |
+| `labels` | `["high_salt"]` |
+| `high_salt` | `true` |
+
+Le binary sensor **Défaut** est `on` dès que le registre ≠ 0.
+
+**Note :** une puissance MQTT forcée trop basse (ex. 30–40 %) peut déclencher un **faux E14** (le firmware compare le courant à un seuil non proportionnel).
 
 ### Durées d’électrolyse
 
@@ -84,3 +110,4 @@ Sans contact câblé, on peut simuler « bassin couvert » en mettant **25 %**, 
 | Production active | `prod_on` | > 0 |
 | Débit | `flow_on` | == 1 |
 | Couverture de piscine | `couv_on` | == 1 (bassin couvert) |
+| Défaut | `error` | > 0 |

@@ -42,3 +42,16 @@ MODE_ELY_OPTIONS: dict[str, int] = {
     "regulated": 3,
 }
 MODE_ELY_REVERSE: dict[int, str] = {v: k for k, v in MODE_ELY_OPTIONS.items()}
+
+# MQTT u32_r/error is a bitmask. Vigipool app code E{n} = bit n.
+# Field-confirmed 2026-08-16: 16384 (1<<14) + app notification "Code E14 —
+# Taux de sel trop élevé" (high current / too much salt). Other bits decode
+# as E{n} without a label until independently confirmed.
+ERROR_NONE = "none"
+ERROR_BIT_HIGH_SALT = 14
+ERROR_MASK_HIGH_SALT = 1 << ERROR_BIT_HIGH_SALT  # 16384
+
+# bit → machine label for confirmed codes only (exposed as attributes).
+ERROR_BIT_LABELS: dict[int, str] = {
+    ERROR_BIT_HIGH_SALT: "high_salt",
+}
