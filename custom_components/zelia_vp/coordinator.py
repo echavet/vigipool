@@ -50,9 +50,11 @@ class ZeliaCoordinator(DataUpdateCoordinator[ZeliaData]):
         self.device_id = device_id
         self.availability_timeout = availability_timeout
         self._last_message_at: float | None = None
-        self._last_device_available: bool | None = None
+        self._last_availability_state: tuple[bool, bool] | None = None
         self._cancel_availability_timer: Any = None
-        self.mqtt = ZeliaMqttClient(host, port, device_id, self._handle_message)
+        self.mqtt = ZeliaMqttClient(
+            host, port, device_id, self._handle_message, self._handle_connection_change
+        )
         self.data: ZeliaData = {}
 
     async def async_start(self) -> None:
@@ -91,11 +93,20 @@ class ZeliaCoordinator(DataUpdateCoordinator[ZeliaData]):
 
     @callback
     def _check_availability(self, _now: Any = None) -> None:
-        """Periodic check to update entity states when availability changes."""
-        current_available = self.device_available
-        if self._last_device_available != current_available:
-            self._last_device_available = current_available
+        """Periodic check to update entity states when availability changes.
+
+        Tracks (device_available, mqtt_connected) so both read-only and
+        writable entities get updated when either flag changes.
+        """
+        current_state = (self.device_available, self.mqtt_connected)
+        if self._last_availability_state != current_state:
+            self._last_availability_state = current_state
             self.async_set_updated_data(self.data)
+
+    @callback
+    def _handle_connection_change(self, connected: bool) -> None:
+        """Called by MQTT client on connect/disconnect transitions."""
+        self._check_availability()
 
     def get_raw(self, mqtt_name: str) -> float | str | None:
         """Return the raw stored value for an MQTT variable name."""

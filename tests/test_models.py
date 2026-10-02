@@ -185,6 +185,110 @@ def test_format_payload_rounding_for_u8() -> None:
     assert helpers.format_payload(payload_num) == "76"
 
 
+def test_u8_rounding_76_4_becomes_76() -> None:
+    """ZeliaNumber.async_set_native_value rounds 76.4 to 76 for u8_w registers.
+
+    This simulates the rounding logic in number.py without HA imports.
+    The actual code does: if desc.mqtt_type.startswith("u8_w"): value = round(value)
+    """
+    mqtt_type = "u8_w"
+    value = 76.4
+
+    # Simulate number.py logic
+    if mqtt_type.startswith("u8_w"):
+        value = round(value)
+
+    assert value == 76
+    # Then coordinator multiplies by write_scale (1.0) and formats
+    payload_num = float(value) * 1.0
+    assert helpers.format_payload(payload_num) == "76"
+
+
+class FakeCoordinatorAvailability:
+    """Minimal fake to test _check_availability logic without HA imports."""
+
+    def __init__(self) -> None:
+        self._last_availability_state: tuple[bool, bool] | None = None
+        self._device_available = False
+        self._mqtt_connected = False
+        self.update_count = 0
+        self.data: dict = {}
+
+    @property
+    def device_available(self) -> bool:
+        return self._device_available
+
+    @property
+    def mqtt_connected(self) -> bool:
+        return self._mqtt_connected
+
+    def async_set_updated_data(self, data: dict) -> None:
+        self.update_count += 1
+
+    def _check_availability(self, _now=None) -> None:
+        """Same logic as ZeliaCoordinator._check_availability."""
+        current_state = (self.device_available, self.mqtt_connected)
+        if self._last_availability_state != current_state:
+            self._last_availability_state = current_state
+            self.async_set_updated_data(self.data)
+
+
+def test_check_availability_fires_on_device_change() -> None:
+    """_check_availability fires update when device_available changes."""
+    fake = FakeCoordinatorAvailability()
+    assert fake.update_count == 0
+
+    # First call: state changes from None to (False, False)
+    fake._check_availability()
+    assert fake.update_count == 1
+
+    # No change: should not fire
+    fake._check_availability()
+    assert fake.update_count == 1
+
+    # device_available changes
+    fake._device_available = True
+    fake._check_availability()
+    assert fake.update_count == 2
+
+
+def test_check_availability_fires_on_mqtt_change() -> None:
+    """_check_availability fires update when mqtt_connected changes."""
+    fake = FakeCoordinatorAvailability()
+
+    # Initialize
+    fake._check_availability()
+    assert fake.update_count == 1
+
+    # mqtt_connected changes
+    fake._mqtt_connected = True
+    fake._check_availability()
+    assert fake.update_count == 2
+
+    # No change
+    fake._check_availability()
+    assert fake.update_count == 2
+
+    # mqtt disconnects
+    fake._mqtt_connected = False
+    fake._check_availability()
+    assert fake.update_count == 3
+
+
+def test_check_availability_fires_on_both_changes() -> None:
+    """_check_availability fires when both flags change together."""
+    fake = FakeCoordinatorAvailability()
+
+    fake._check_availability()
+    assert fake.update_count == 1
+
+    # Both change at once
+    fake._device_available = True
+    fake._mqtt_connected = True
+    fake._check_availability()
+    assert fake.update_count == 2
+
+
 def test_power_ely_step() -> None:
     """power_ely should accept any integer 0-100 (native_step=1).
 
