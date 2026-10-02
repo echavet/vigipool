@@ -60,6 +60,11 @@ class ZeliaMqttClient:
         """Publish a message if connected."""
         client = self._publish_client
         if client is None or not self.connected:
+            _LOGGER.warning(
+                "Cannot publish %s = %s: MQTT client is not connected",
+                topic,
+                payload,
+            )
             raise ConnectionError("MQTT client is not connected")
         await client.publish(topic, payload)
         _LOGGER.debug("Published %s = %s", topic, payload)

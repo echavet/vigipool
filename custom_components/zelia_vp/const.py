@@ -18,8 +18,10 @@ CONF_DEVICE_ID = "device_id"
 DEFAULT_PORT = 1883
 DEFAULT_NAME = "Zelia VP"
 
-# Seconds without MQTT traffic before entities become unavailable.
-DEFAULT_AVAILABILITY_TIMEOUT = 600
+# Seconds without MQTT traffic before read-only entities become unavailable.
+# The device only sends approximately every ~915s when idle, so 1800s (30 min)
+# prevents spurious unavailable states during normal operation.
+DEFAULT_AVAILABILITY_TIMEOUT = 1800
 
 # Production state (prod_on).
 # Field-confirmed on Zelia VP (~24 h observation, ~2 h alternation between 1 and 2):

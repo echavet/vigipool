@@ -55,3 +55,16 @@ class ZeliaEntity(CoordinatorEntity[ZeliaCoordinator]):
     def _raw_number(self) -> float | None:
         """Raw numeric value for this entity's mqtt_name."""
         return self.coordinator.get_raw_number(self._mqtt_desc().mqtt_name)
+
+
+class ZeliaWritableEntity(ZeliaEntity):
+    """Base class for writable Zelia entities (number, switch, select).
+
+    Writable entities remain available as long as the MQTT broker is connected,
+    so that commands can be published even when the device has been quiet.
+    """
+
+    @property
+    def available(self) -> bool:
+        """Return True if MQTT is connected (commands can be sent)."""
+        return self.coordinator.mqtt_connected

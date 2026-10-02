@@ -9,7 +9,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .coordinator import ZeliaCoordinator
-from .entity import ZeliaEntity
+from .entity import ZeliaWritableEntity
 from .models import SWITCH_DESCRIPTIONS, ZeliaSwitchEntityDescription
 
 PARALLEL_UPDATES = 0
@@ -27,7 +27,7 @@ async def async_setup_entry(
     )
 
 
-class ZeliaSwitch(ZeliaEntity, SwitchEntity):
+class ZeliaSwitch(ZeliaWritableEntity, SwitchEntity):
     """Writable switch entity for Zelia."""
 
     entity_description: ZeliaSwitchEntityDescription

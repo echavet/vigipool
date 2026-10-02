@@ -9,7 +9,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .coordinator import ZeliaCoordinator
-from .entity import ZeliaEntity
+from .entity import ZeliaWritableEntity
 from .helpers import mode_ely_from_raw
 from .models import SELECT_DESCRIPTIONS, ZeliaSelectEntityDescription
 
@@ -28,7 +28,7 @@ async def async_setup_entry(
     )
 
 
-class ZeliaSelect(ZeliaEntity, SelectEntity):
+class ZeliaSelect(ZeliaWritableEntity, SelectEntity):
     """Electrolysis mode select."""
 
     entity_description: ZeliaSelectEntityDescription
