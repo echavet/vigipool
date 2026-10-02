@@ -11,7 +11,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .coordinator import ZeliaCoordinator
-from .entity import ZeliaEntity
+from .entity import ZeliaWritableEntity
 from .helpers import apply_read_scale, is_temp_sentinel
 from .models import NUMBER_DESCRIPTIONS, ZeliaNumberEntityDescription
 
@@ -32,7 +32,7 @@ async def async_setup_entry(
     )
 
 
-class ZeliaNumber(ZeliaEntity, NumberEntity):
+class ZeliaNumber(ZeliaWritableEntity, NumberEntity):
     """Writable number entity for Zelia."""
 
     entity_description: ZeliaNumberEntityDescription
@@ -62,6 +62,9 @@ class ZeliaNumber(ZeliaEntity, NumberEntity):
             value = max(desc.native_min_value, value)
         if desc.native_max_value is not None:
             value = min(desc.native_max_value, value)
+        # u8_w registers require integer values; round to avoid '72.5'.
+        if desc.mqtt_type.startswith("u8_w"):
+            value = round(value)
         try:
             await self.coordinator.async_publish_desired(desc.key, value)
         except Exception:

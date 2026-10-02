@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 import logging
 import time
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import DEFAULT_AVAILABILITY_TIMEOUT, MODE_ELY_OPTIONS
@@ -16,6 +18,8 @@ from .models import WRITABLE_DESCRIPTIONS, ZeliaMqttMixin
 from .mqtt_client import ZeliaMqttClient
 
 _LOGGER = logging.getLogger(__name__)
+
+AVAILABILITY_CHECK_INTERVAL = timedelta(seconds=60)
 
 # Coordinator data: mqtt_name → raw float (or str if non-numeric).
 ZeliaData = dict[str, float | str]
@@ -46,15 +50,25 @@ class ZeliaCoordinator(DataUpdateCoordinator[ZeliaData]):
         self.device_id = device_id
         self.availability_timeout = availability_timeout
         self._last_message_at: float | None = None
-        self.mqtt = ZeliaMqttClient(host, port, device_id, self._handle_message)
+        self._last_availability_state: tuple[bool, bool] | None = None
+        self._cancel_availability_timer: Any = None
+        self.mqtt = ZeliaMqttClient(
+            host, port, device_id, self._handle_message, self._handle_connection_change
+        )
         self.data: ZeliaData = {}
 
     async def async_start(self) -> None:
-        """Start MQTT client background task."""
+        """Start MQTT client background task and availability timer."""
         await self.mqtt.start()
+        self._cancel_availability_timer = async_track_time_interval(
+            self.hass, self._check_availability, AVAILABILITY_CHECK_INTERVAL
+        )
 
     async def async_shutdown(self) -> None:
-        """Stop MQTT client."""
+        """Stop MQTT client and cancel availability timer."""
+        if self._cancel_availability_timer is not None:
+            self._cancel_availability_timer()
+            self._cancel_availability_timer = None
         await self.mqtt.stop()
 
     @property
@@ -71,6 +85,28 @@ class ZeliaCoordinator(DataUpdateCoordinator[ZeliaData]):
             return False
         age = self.last_message_age
         return age is not None and age < self.availability_timeout
+
+    @property
+    def mqtt_connected(self) -> bool:
+        """Return True if the MQTT client is connected to the broker."""
+        return self.mqtt.connected
+
+    @callback
+    def _check_availability(self, _now: Any = None) -> None:
+        """Periodic check to update entity states when availability changes.
+
+        Tracks (device_available, mqtt_connected) so both read-only and
+        writable entities get updated when either flag changes.
+        """
+        current_state = (self.device_available, self.mqtt_connected)
+        if self._last_availability_state != current_state:
+            self._last_availability_state = current_state
+            self.async_set_updated_data(self.data)
+
+    @callback
+    def _handle_connection_change(self, connected: bool) -> None:
+        """Called by MQTT client on connect/disconnect transitions."""
+        self._check_availability()
 
     def get_raw(self, mqtt_name: str) -> float | str | None:
         """Return the raw stored value for an MQTT variable name."""

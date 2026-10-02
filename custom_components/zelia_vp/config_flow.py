@@ -153,7 +153,7 @@ class ZeliaVpOptionsFlow(OptionsFlow):
                     default=options.get(
                         "availability_timeout", DEFAULT_AVAILABILITY_TIMEOUT
                     ),
-                ): vol.All(vol.Coerce(int), vol.Range(min=60, max=3600)),
+                ): vol.All(vol.Coerce(int), vol.Range(min=60, max=7200)),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

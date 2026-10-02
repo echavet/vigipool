@@ -12,6 +12,7 @@ import aiomqtt
 _LOGGER = logging.getLogger(__name__)
 
 MessageCallback = Callable[[str, str], None]
+ConnectionCallback = Callable[[bool], None]
 
 
 class ZeliaMqttClient:
@@ -23,11 +24,13 @@ class ZeliaMqttClient:
         port: int,
         device_id: str,
         on_message: MessageCallback,
+        on_connection_change: ConnectionCallback | None = None,
     ) -> None:
         self._host = host
         self._port = port
         self._device_id = device_id
         self._on_message = on_message
+        self._on_connection_change = on_connection_change
         self._client_id = f"ha-zelia-{device_id[-12:]}-{uuid.uuid4().hex[:8]}"
         self._stop = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
@@ -60,6 +63,11 @@ class ZeliaMqttClient:
         """Publish a message if connected."""
         client = self._publish_client
         if client is None or not self.connected:
+            _LOGGER.warning(
+                "Cannot publish %s = %s: MQTT client is not connected",
+                topic,
+                payload,
+            )
             raise ConnectionError("MQTT client is not connected")
         await client.publish(topic, payload)
         _LOGGER.debug("Published %s = %s", topic, payload)
@@ -76,6 +84,8 @@ class ZeliaMqttClient:
                 ) as client:
                     self._publish_client = client
                     self.connected = True
+                    if self._on_connection_change:
+                        self._on_connection_change(True)
                     delay = 1.0
                     topic = f"{self._device_id}/#"
                     await client.subscribe(topic)
@@ -113,8 +123,11 @@ class ZeliaMqttClient:
                     pass
                 delay = min(delay * 2, 60.0)
             finally:
+                was_connected = self.connected
                 self.connected = False
                 self._publish_client = None
+                if was_connected and self._on_connection_change:
+                    self._on_connection_change(False)
 
 
 async def validate_mqtt_connection(

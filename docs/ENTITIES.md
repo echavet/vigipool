@@ -21,7 +21,7 @@ Préfixe MQTT : `{device_id}/…` (ex. `zelix_8C4B14821190`)
 
 | Entité | Topic | Plage | Transform |
 |---------|-------|-------|-----------|
-| Puissance | `u8_w/power_ely/info/*` | 0–100 / 5 | — |
+| Puissance | `u8_w/power_ely/info/*` | 0–100 / 1 | — |
 | Durée théorique | `u8_w/ely_duration_theo/info/*` | 1–24 h | — |
 | Durée choc | `u8_w/choc_duration/info/*` | 1–24 | — |
 | Temp. min arrêt | `u16_w/temp_min_off_ely/info/*` | 10–25 °C / 0.5 | read ÷10, write ×10 |

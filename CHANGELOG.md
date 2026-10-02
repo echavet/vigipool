@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assistant Core), e.g. `2026.8.16`.
 
+## [2026.10.2] - 2026-10-02
+
+### Fixed
+
+- **Bug critique : les commandes `number.set_value` étaient silencieusement ignorées** (entités « indisponibles »).
+  - **Cause** : le timeout de disponibilité par défaut (600 s) était trop court ; le Zelia VP n'envoie qu'environ toutes les ~915 s au repos, provoquant 5 min d'indisponibilité à chaque cycle.
+  - **Correction** : timeout par défaut porté à **1800 s** (30 min). Plage configurable étendue à 60–7200 s.
+  - Ajout d'un **timer périodique (60 s)** qui met à jour l'état des entités quand la disponibilité change, permettant d'afficher réellement « indisponible » dans l'UI.
+  - Les **entités inscriptibles** (number, switch, select) restent désormais disponibles tant que le client MQTT est connecté, même si l'appareil est silencieux — les commandes peuvent toujours être publiées.
+  - Les erreurs de publication MQTT sont maintenant loguées en **warning** au lieu de debug.
+
+- **Pas de puissance trop grossier** : `power_ely` (puissance de production) accepte désormais n'importe quel entier 0–100 (`native_step=1`), au lieu de pas de 5. L'appli officielle permet ex. 76 %.
+  - Arrondi automatique à l'entier le plus proche pour les registres u8 avant publication.
+
+### Changed
+
+- Documentation ENTITIES.md mise à jour pour refléter le nouveau pas (0–100 / 1).
+
 ## [2026.8.16] - 2026-08-16
 
 ### Added
@@ -97,6 +115,7 @@ Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assist
 - Sensors, binary sensors, numbers, switches, select (electrolysis mode).
 - French and English translations, diagnostics, unit tests.
 
+[2026.10.2]: https://github.com/echavet/vigipool/releases/tag/2026.10.2
 [2026.8.16]: https://github.com/echavet/vigipool/releases/tag/2026.8.16
 [2026.7.25]: https://github.com/echavet/vigipool/releases/tag/2026.7.25
 [2026.7.24]: https://github.com/echavet/vigipool/releases/tag/2026.7.24

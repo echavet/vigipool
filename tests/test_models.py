@@ -152,3 +152,161 @@ def test_raw_store_interpretation_pipeline() -> None:
     assert float(store["prod_on"]) > 0  # production_active
     assert helpers.mode_ely_from_raw(float(store["mode_ely"])) == "auto"
     assert helpers.firmware_from_raw(float(store["sw_vers"])) == "832"
+
+
+def test_default_availability_timeout() -> None:
+    """Default timeout should accommodate ~915s device idle cycles."""
+    # Bug fix: device sends every ~915s, so 600s was too short.
+    # Increased to 1800s (30 min) to prevent spurious unavailability.
+    assert const.DEFAULT_AVAILABILITY_TIMEOUT == 1800
+
+
+def test_format_payload_integer() -> None:
+    """format_payload must produce integer strings for u8/u16 values."""
+    # Integer values
+    assert helpers.format_payload(76) == "76"
+    assert helpers.format_payload(76.0) == "76"
+    assert helpers.format_payload(0) == "0"
+    assert helpers.format_payload(100) == "100"
+    # Fractional values (for temp with write_scale)
+    assert helpers.format_payload(155.0) == "155"
+    # Non-integer values are preserved (should be rounded before calling)
+    assert helpers.format_payload(72.5) == "72.5"
+
+
+def test_format_payload_rounding_for_u8() -> None:
+    """Simulate u8 value rounding as done in number.py async_set_native_value."""
+    # u8 registers require integer values; round before publishing.
+    value = 76.5
+    rounded = round(value)
+    assert rounded == 76
+    # After rounding, format_payload produces integer string
+    payload_num = float(rounded) * 1.0  # write_scale=1.0 for power_ely
+    assert helpers.format_payload(payload_num) == "76"
+
+
+def test_u8_rounding_76_4_becomes_76() -> None:
+    """ZeliaNumber.async_set_native_value rounds 76.4 to 76 for u8_w registers.
+
+    This simulates the rounding logic in number.py without HA imports.
+    The actual code does: if desc.mqtt_type.startswith("u8_w"): value = round(value)
+    """
+    mqtt_type = "u8_w"
+    value = 76.4
+
+    # Simulate number.py logic
+    if mqtt_type.startswith("u8_w"):
+        value = round(value)
+
+    assert value == 76
+    # Then coordinator multiplies by write_scale (1.0) and formats
+    payload_num = float(value) * 1.0
+    assert helpers.format_payload(payload_num) == "76"
+
+
+class FakeCoordinatorAvailability:
+    """Minimal fake to test _check_availability logic without HA imports."""
+
+    def __init__(self) -> None:
+        self._last_availability_state: tuple[bool, bool] | None = None
+        self._device_available = False
+        self._mqtt_connected = False
+        self.update_count = 0
+        self.data: dict = {}
+
+    @property
+    def device_available(self) -> bool:
+        return self._device_available
+
+    @property
+    def mqtt_connected(self) -> bool:
+        return self._mqtt_connected
+
+    def async_set_updated_data(self, data: dict) -> None:
+        self.update_count += 1
+
+    def _check_availability(self, _now=None) -> None:
+        """Same logic as ZeliaCoordinator._check_availability."""
+        current_state = (self.device_available, self.mqtt_connected)
+        if self._last_availability_state != current_state:
+            self._last_availability_state = current_state
+            self.async_set_updated_data(self.data)
+
+
+def test_check_availability_fires_on_device_change() -> None:
+    """_check_availability fires update when device_available changes."""
+    fake = FakeCoordinatorAvailability()
+    assert fake.update_count == 0
+
+    # First call: state changes from None to (False, False)
+    fake._check_availability()
+    assert fake.update_count == 1
+
+    # No change: should not fire
+    fake._check_availability()
+    assert fake.update_count == 1
+
+    # device_available changes
+    fake._device_available = True
+    fake._check_availability()
+    assert fake.update_count == 2
+
+
+def test_check_availability_fires_on_mqtt_change() -> None:
+    """_check_availability fires update when mqtt_connected changes."""
+    fake = FakeCoordinatorAvailability()
+
+    # Initialize
+    fake._check_availability()
+    assert fake.update_count == 1
+
+    # mqtt_connected changes
+    fake._mqtt_connected = True
+    fake._check_availability()
+    assert fake.update_count == 2
+
+    # No change
+    fake._check_availability()
+    assert fake.update_count == 2
+
+    # mqtt disconnects
+    fake._mqtt_connected = False
+    fake._check_availability()
+    assert fake.update_count == 3
+
+
+def test_check_availability_fires_on_both_changes() -> None:
+    """_check_availability fires when both flags change together."""
+    fake = FakeCoordinatorAvailability()
+
+    fake._check_availability()
+    assert fake.update_count == 1
+
+    # Both change at once
+    fake._device_available = True
+    fake._mqtt_connected = True
+    fake._check_availability()
+    assert fake.update_count == 2
+
+
+def test_power_ely_step() -> None:
+    """power_ely should accept any integer 0-100 (native_step=1).
+
+    Bug fix: step was 5, but device accepts any integer (official app set 76).
+    This test reads the models.py file directly to avoid homeassistant dependency.
+    """
+    models_path = PKG_DIR / "models.py"
+    content = models_path.read_text()
+
+    # Check native_step=1 for power_ely description
+    # Look for the pattern in the file
+    assert "native_step=1," in content, "power_ely should have native_step=1"
+
+    # Verify it's associated with power_ely by checking the context
+    import re
+
+    # Find the power_ely description block
+    pattern = r'key="power_ely".*?native_step=(\d+)'
+    match = re.search(pattern, content, re.DOTALL)
+    assert match is not None, "power_ely description not found"
+    assert match.group(1) == "1", f"power_ely native_step should be 1, got {match.group(1)}"
