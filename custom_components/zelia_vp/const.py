@@ -18,10 +18,17 @@ CONF_DEVICE_ID = "device_id"
 DEFAULT_PORT = 1883
 DEFAULT_NAME = "Zelia VP"
 
-# Seconds without MQTT traffic before read-only entities become unavailable.
-# The device only sends approximately every ~915s when idle, so 1800s (30 min)
-# prevents spurious unavailable states during normal operation.
-DEFAULT_AVAILABILITY_TIMEOUT = 1800
+# Grace period (seconds) after MQTT disconnection before entities go unavailable.
+# Allows brief network hiccups without flapping. TomTuT reference uses 180s.
+# Note: availability is now based on MQTT session, not message age.
+DEFAULT_DISCONNECT_GRACE_SECONDS = 180
+
+# Legacy option key (pre-2026.10.5); migrated to disconnect_grace_seconds.
+# Kept for migration code reference only.
+LEGACY_AVAILABILITY_TIMEOUT = "availability_timeout"
+
+# New option key for disconnect grace period.
+CONF_DISCONNECT_GRACE = "disconnect_grace_seconds"
 
 # Production state (prod_on).
 # Field-confirmed on Zelia VP (~24 h observation, ~2 h alternation between 1 and 2):

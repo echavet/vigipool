@@ -19,7 +19,8 @@ from homeassistant.helpers import config_validation as cv
 
 from .const import (
     CONF_DEVICE_ID,
-    DEFAULT_AVAILABILITY_TIMEOUT,
+    CONF_DISCONNECT_GRACE,
+    DEFAULT_DISCONNECT_GRACE_SECONDS,
     DEFAULT_NAME,
     DEFAULT_PORT,
     DOMAIN,
@@ -33,7 +34,7 @@ _LOGGER = logging.getLogger(__name__)
 class ZeliaVpConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Zelia VP."""
 
-    VERSION = 1
+    VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -71,7 +72,7 @@ class ZeliaVpConfigFlow(ConfigFlow, domain=DOMAIN):
                             CONF_NAME: name,
                         },
                         options={
-                            "availability_timeout": DEFAULT_AVAILABILITY_TIMEOUT,
+                            CONF_DISCONNECT_GRACE: DEFAULT_DISCONNECT_GRACE_SECONDS,
                         },
                     )
 
@@ -98,7 +99,7 @@ class ZeliaVpOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manage options (host/port/name/timeout). Reload via update listener."""
+        """Manage options (host/port/name/grace period). Reload via update listener."""
         errors: dict[str, str] = {}
         entry = self.config_entry
 
@@ -106,7 +107,7 @@ class ZeliaVpOptionsFlow(OptionsFlow):
             host = user_input[CONF_HOST].strip()
             port = int(user_input[CONF_PORT])
             name = user_input[CONF_NAME].strip() or DEFAULT_NAME
-            timeout = int(user_input["availability_timeout"])
+            grace = int(user_input[CONF_DISCONNECT_GRACE])
 
             try:
                 await validate_mqtt_connection(
@@ -120,7 +121,8 @@ class ZeliaVpOptionsFlow(OptionsFlow):
             except Exception:  # noqa: BLE001
                 errors["base"] = "cannot_connect"
             else:
-                # Update entry; add_update_listener triggers a single reload.
+                # Update data (host/port/name); options are returned via async_create_entry.
+                # Note: async_create_entry(data=...) in OptionsFlow sets the entry's options.
                 self.hass.config_entries.async_update_entry(
                     entry,
                     title=name,
@@ -130,12 +132,12 @@ class ZeliaVpOptionsFlow(OptionsFlow):
                         CONF_PORT: port,
                         CONF_NAME: name,
                     },
-                    options={
-                        **entry.options,
-                        "availability_timeout": timeout,
-                    },
                 )
-                return self.async_create_entry(title="", data={})
+                # Return new options; triggers add_update_listener for reload.
+                return self.async_create_entry(
+                    title="",
+                    data={CONF_DISCONNECT_GRACE: grace},
+                )
 
         data = entry.data
         options = entry.options
@@ -149,11 +151,11 @@ class ZeliaVpOptionsFlow(OptionsFlow):
                     CONF_NAME, default=data.get(CONF_NAME, DEFAULT_NAME)
                 ): cv.string,
                 vol.Required(
-                    "availability_timeout",
+                    CONF_DISCONNECT_GRACE,
                     default=options.get(
-                        "availability_timeout", DEFAULT_AVAILABILITY_TIMEOUT
+                        CONF_DISCONNECT_GRACE, DEFAULT_DISCONNECT_GRACE_SECONDS
                     ),
-                ): vol.All(vol.Coerce(int), vol.Range(min=60, max=7200)),
+                ): vol.All(vol.Coerce(int), vol.Range(min=30, max=600)),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

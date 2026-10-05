@@ -32,7 +32,10 @@
           "host": "Adresse IP / hôte",
           "port": "Port MQTT",
           "name": "Nom",
-          "availability_timeout": "Délai d'indisponibilité (secondes)"
+          "disconnect_grace_seconds": "Délai de grâce après déconnexion (secondes)"
+        },
+        "data_description": {
+          "disconnect_grace_seconds": "Temps d'attente après déconnexion MQTT avant que les entités deviennent indisponibles (30–600s, défaut 180)."
         }
       }
     },
@@ -64,13 +67,15 @@
       "error": { "name": "Code erreur" },
       "error_e_codes": { "name": "Code erreur Vigipool" },
       "firmware": { "name": "Firmware" },
-      "cell_type": { "name": "Type de cellule" }
+      "cell_type": { "name": "Type de cellule" },
+      "last_seen": { "name": "Dernière communication" }
     },
     "binary_sensor": {
       "production_active": { "name": "Production active" },
       "flow": { "name": "Débit détecté" },
       "cover": { "name": "Couverture de piscine" },
-      "fault": { "name": "Défaut" }
+      "fault": { "name": "Défaut" },
+      "mqtt_connected": { "name": "MQTT connecté" }
     },
     "number": {
       "power_ely": { "name": "Puissance de production" },

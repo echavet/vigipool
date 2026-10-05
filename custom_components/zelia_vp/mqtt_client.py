@@ -11,6 +11,11 @@ import aiomqtt
 
 _LOGGER = logging.getLogger(__name__)
 
+# MQTT keepalive: how often the broker expects a PING if idle.
+# Short keepalive (15s) ensures quick detection of network issues.
+# The Zelia device broker supports this; TomTuT reference uses 15s.
+MQTT_KEEPALIVE_SECONDS = 15
+
 MessageCallback = Callable[[str, str], None]
 ConnectionCallback = Callable[[bool], None]
 
@@ -81,6 +86,7 @@ class ZeliaMqttClient:
                     hostname=self._host,
                     port=self._port,
                     identifier=self._client_id,
+                    keepalive=MQTT_KEEPALIVE_SECONDS,
                 ) as client:
                     self._publish_client = client
                     self.connected = True

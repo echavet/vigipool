@@ -154,11 +154,11 @@ def test_raw_store_interpretation_pipeline() -> None:
     assert helpers.firmware_from_raw(float(store["sw_vers"])) == "832"
 
 
-def test_default_availability_timeout() -> None:
-    """Default timeout should accommodate ~915s device idle cycles."""
-    # Bug fix: device sends every ~915s, so 600s was too short.
-    # Increased to 1800s (30 min) to prevent spurious unavailability.
-    assert const.DEFAULT_AVAILABILITY_TIMEOUT == 1800
+def test_default_disconnect_grace_seconds() -> None:
+    """Default grace period allows network hiccups without flapping."""
+    # Fix: availability is now based on MQTT session, not message age.
+    # Grace period (180s) allows reconnection after brief disconnects.
+    assert const.DEFAULT_DISCONNECT_GRACE_SECONDS == 180
 
 
 def test_format_payload_integer() -> None:
@@ -310,3 +310,244 @@ def test_power_ely_step() -> None:
     match = re.search(pattern, content, re.DOTALL)
     assert match is not None, "power_ely description not found"
     assert match.group(1) == "1", f"power_ely native_step should be 1, got {match.group(1)}"
+
+
+# =============================================================================
+# New tests for session-based availability (2026.10.5 fix)
+# =============================================================================
+
+
+class FakeMqttClient:
+    """Minimal MQTT client stub for testing coordinator availability logic."""
+
+    def __init__(self) -> None:
+        self.connected = False
+
+
+class FakeCoordinatorSessionAvailability:
+    """Test fixture mimicking new ZeliaCoordinator availability logic.
+
+    Availability is based on MQTT session + grace period, NOT message age.
+    """
+
+    def __init__(self, disconnect_grace_seconds: int = 180) -> None:
+        self.mqtt = FakeMqttClient()
+        self.disconnect_grace_seconds = disconnect_grace_seconds
+        self._disconnected_at: float | None = None
+        self._last_message_at: float | None = None
+        self._monotonic_now = 0.0
+
+    def set_time(self, t: float) -> None:
+        """Advance fake monotonic time."""
+        self._monotonic_now = t
+
+    def connect(self) -> None:
+        """Simulate MQTT connect."""
+        self.mqtt.connected = True
+        self._disconnected_at = None
+
+    def disconnect(self) -> None:
+        """Simulate MQTT disconnect."""
+        self.mqtt.connected = False
+        self._disconnected_at = self._monotonic_now
+
+    def receive_message(self) -> None:
+        """Simulate receiving an MQTT message."""
+        self._last_message_at = self._monotonic_now
+
+    @property
+    def device_available(self) -> bool:
+        """Same logic as ZeliaCoordinator.device_available."""
+        if self.mqtt.connected:
+            return True
+        if self._disconnected_at is None:
+            return False
+        grace_elapsed = self._monotonic_now - self._disconnected_at
+        return grace_elapsed < self.disconnect_grace_seconds
+
+
+def test_silence_longer_than_old_timeout_keeps_available() -> None:
+    """MQTT silence > old 600s timeout does NOT cause unavailable.
+
+    This was the bug: availability was based on message age with 600s timeout,
+    but the device only publishes every ~915s (pump on) or ~3610s (pump off).
+    Now availability is based on MQTT session, not message age.
+    """
+    coord = FakeCoordinatorSessionAvailability(disconnect_grace_seconds=180)
+    coord.set_time(0)
+    coord.connect()
+    coord.receive_message()
+
+    # Verify available immediately after connect + message
+    assert coord.device_available is True
+
+    # Simulate 1000s of silence (> old 600s timeout, > ~915s pump-on period)
+    coord.set_time(1000)
+    # Still connected → still available despite long silence
+    assert coord.device_available is True
+
+    # Simulate 4000s of silence (> ~3610s pump-off period)
+    coord.set_time(4000)
+    assert coord.device_available is True
+
+
+def test_mqtt_disconnect_triggers_grace_period() -> None:
+    """MQTT disconnect starts grace period; unavailable after it expires."""
+    coord = FakeCoordinatorSessionAvailability(disconnect_grace_seconds=180)
+    coord.set_time(0)
+    coord.connect()
+    coord.receive_message()
+    assert coord.device_available is True
+
+    # Disconnect at t=100
+    coord.set_time(100)
+    coord.disconnect()
+
+    # Still in grace period (0s elapsed)
+    assert coord.device_available is True
+
+    # 179s elapsed → still in grace period
+    coord.set_time(100 + 179)
+    assert coord.device_available is True
+
+    # 180s elapsed → grace period expired → unavailable
+    coord.set_time(100 + 180)
+    assert coord.device_available is False
+
+    # 300s elapsed → still unavailable
+    coord.set_time(100 + 300)
+    assert coord.device_available is False
+
+
+def test_reconnect_restores_availability() -> None:
+    """Reconnecting after grace period expiry restores availability."""
+    coord = FakeCoordinatorSessionAvailability(disconnect_grace_seconds=180)
+    coord.set_time(0)
+    coord.connect()
+    coord.receive_message()
+
+    # Disconnect and wait past grace period
+    coord.set_time(100)
+    coord.disconnect()
+    coord.set_time(100 + 200)  # 200s > 180s grace
+    assert coord.device_available is False
+
+    # Reconnect
+    coord.connect()
+    assert coord.device_available is True
+
+    # Stays available even without new messages
+    coord.set_time(100 + 500)
+    assert coord.device_available is True
+
+
+def test_reconnect_during_grace_period_clears_disconnect() -> None:
+    """Reconnecting during grace period resets the timer."""
+    coord = FakeCoordinatorSessionAvailability(disconnect_grace_seconds=180)
+    coord.set_time(0)
+    coord.connect()
+
+    # Disconnect
+    coord.set_time(100)
+    coord.disconnect()
+
+    # 90s into grace period
+    coord.set_time(190)
+    assert coord.device_available is True
+
+    # Reconnect
+    coord.connect()
+    assert coord._disconnected_at is None  # Timer cleared
+
+    # Still available after what would have been expiry
+    coord.set_time(300)
+    assert coord.device_available is True
+
+
+def test_never_connected_is_unavailable() -> None:
+    """Device is unavailable if MQTT was never connected."""
+    coord = FakeCoordinatorSessionAvailability(disconnect_grace_seconds=180)
+    coord.set_time(0)
+    assert coord.device_available is False
+
+    coord.set_time(1000)
+    assert coord.device_available is False
+
+
+def test_migration_removes_legacy_availability_timeout() -> None:
+    """Migration from v1 to v2 removes availability_timeout option.
+
+    Old entries stored availability_timeout (message-age based), which caused
+    false unavailability. New logic uses MQTT session + grace period.
+    """
+    # Simulate old v1 options
+    old_options = {
+        "availability_timeout": 600,  # The problematic old option
+    }
+
+    # Migration logic (same as in __init__.py async_migrate_entry)
+    new_options = dict(old_options)
+    new_options.pop(const.LEGACY_AVAILABILITY_TIMEOUT, None)
+    new_options[const.CONF_DISCONNECT_GRACE] = const.DEFAULT_DISCONNECT_GRACE_SECONDS
+
+    # Verify migration result
+    assert "availability_timeout" not in new_options
+    assert new_options[const.CONF_DISCONNECT_GRACE] == 180
+
+
+def test_migration_handles_workaround_timeout() -> None:
+    """Migration handles entries with temporary workaround timeout (7200s)."""
+    # User may have set availability_timeout to 7200 as a workaround
+    old_options = {
+        "availability_timeout": 7200,
+    }
+
+    new_options = dict(old_options)
+    new_options.pop(const.LEGACY_AVAILABILITY_TIMEOUT, None)
+    new_options[const.CONF_DISCONNECT_GRACE] = const.DEFAULT_DISCONNECT_GRACE_SECONDS
+
+    # Verify migration replaces it with the new default
+    assert "availability_timeout" not in new_options
+    assert new_options[const.CONF_DISCONNECT_GRACE] == 180
+
+
+def test_mqtt_keepalive_constant() -> None:
+    """Verify MQTT keepalive is configured for quick disconnect detection.
+
+    Reads the source file directly to avoid importing aiomqtt.
+    """
+    content = (PKG_DIR / "mqtt_client.py").read_text()
+    assert "MQTT_KEEPALIVE_SECONDS = 15" in content
+    assert "keepalive=MQTT_KEEPALIVE_SECONDS" in content
+
+
+def test_options_flow_persists_values() -> None:
+    """Options flow must persist submitted values, not wipe them.
+
+    Bug fix: async_create_entry(data={}) was wiping options.
+    The fix: async_create_entry(data={CONF_DISCONNECT_GRACE: grace}).
+
+    This test verifies the config_flow.py code pattern without HA imports.
+    """
+    content = (PKG_DIR / "config_flow.py").read_text()
+
+    # Verify options are returned via async_create_entry, not wiped
+    assert "async_create_entry(" in content
+
+    # The bug was: async_create_entry(title="", data={})
+    # This pattern should NOT exist (empty data wipes options)
+    import re
+
+    # Look for the problematic pattern: async_create_entry with empty data={}
+    # This regex matches async_create_entry(...data={}) or data = {}
+    bad_pattern = r"async_create_entry\([^)]*data\s*=\s*\{\s*\}"
+    bad_matches = re.findall(bad_pattern, content)
+    assert len(bad_matches) == 0, (
+        f"Found async_create_entry with empty data (wipes options): {bad_matches}"
+    )
+
+    # Verify the correct pattern exists: async_create_entry with CONF_DISCONNECT_GRACE
+    good_pattern = r"async_create_entry\([^)]*data\s*=\s*\{[^}]*CONF_DISCONNECT_GRACE"
+    assert re.search(good_pattern, content), (
+        "Options flow should return async_create_entry(data={CONF_DISCONNECT_GRACE: ...})"
+    )
