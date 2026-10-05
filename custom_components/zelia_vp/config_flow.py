@@ -121,7 +121,8 @@ class ZeliaVpOptionsFlow(OptionsFlow):
             except Exception:  # noqa: BLE001
                 errors["base"] = "cannot_connect"
             else:
-                # Update entry; add_update_listener triggers a single reload.
+                # Update data (host/port/name); options are returned via async_create_entry.
+                # Note: async_create_entry(data=...) in OptionsFlow sets the entry's options.
                 self.hass.config_entries.async_update_entry(
                     entry,
                     title=name,
@@ -131,11 +132,12 @@ class ZeliaVpOptionsFlow(OptionsFlow):
                         CONF_PORT: port,
                         CONF_NAME: name,
                     },
-                    options={
-                        CONF_DISCONNECT_GRACE: grace,
-                    },
                 )
-                return self.async_create_entry(title="", data={})
+                # Return new options; triggers add_update_listener for reload.
+                return self.async_create_entry(
+                    title="",
+                    data={CONF_DISCONNECT_GRACE: grace},
+                )
 
         data = entry.data
         options = entry.options

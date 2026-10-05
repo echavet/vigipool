@@ -519,3 +519,35 @@ def test_mqtt_keepalive_constant() -> None:
     content = (PKG_DIR / "mqtt_client.py").read_text()
     assert "MQTT_KEEPALIVE_SECONDS = 15" in content
     assert "keepalive=MQTT_KEEPALIVE_SECONDS" in content
+
+
+def test_options_flow_persists_values() -> None:
+    """Options flow must persist submitted values, not wipe them.
+
+    Bug fix: async_create_entry(data={}) was wiping options.
+    The fix: async_create_entry(data={CONF_DISCONNECT_GRACE: grace}).
+
+    This test verifies the config_flow.py code pattern without HA imports.
+    """
+    content = (PKG_DIR / "config_flow.py").read_text()
+
+    # Verify options are returned via async_create_entry, not wiped
+    assert "async_create_entry(" in content
+
+    # The bug was: async_create_entry(title="", data={})
+    # This pattern should NOT exist (empty data wipes options)
+    import re
+
+    # Look for the problematic pattern: async_create_entry with empty data={}
+    # This regex matches async_create_entry(...data={}) or data = {}
+    bad_pattern = r"async_create_entry\([^)]*data\s*=\s*\{\s*\}"
+    bad_matches = re.findall(bad_pattern, content)
+    assert len(bad_matches) == 0, (
+        f"Found async_create_entry with empty data (wipes options): {bad_matches}"
+    )
+
+    # Verify the correct pattern exists: async_create_entry with CONF_DISCONNECT_GRACE
+    good_pattern = r"async_create_entry\([^)]*data\s*=\s*\{[^}]*CONF_DISCONNECT_GRACE"
+    assert re.search(good_pattern, content), (
+        "Options flow should return async_create_entry(data={CONF_DISCONNECT_GRACE: ...})"
+    )

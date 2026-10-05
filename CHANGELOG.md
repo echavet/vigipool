@@ -13,6 +13,8 @@ Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assist
   - **Nouvelle logique** : disponibilité liée à la **session MQTT** (keepalive 15 s) + **grace period** après déconnexion (180 s par défaut, configurable 30–600 s). Les entités restent disponibles tant que le broker répond, même si le device est silencieux pendant des heures.
   - **Migration automatique** : les entrées existantes (V1, option `availability_timeout`) sont migrées vers V2 (`disconnect_grace_seconds`). Aucune action utilisateur requise.
 
+- **Options flow écrasait les options** : `async_create_entry(data={})` dans l'options flow effaçait les options de l'entrée. Corrigé : les options soumises sont maintenant correctement persistées.
+
 ### Added
 
 - **Capteur diagnostique MQTT connecté** (`binary_sensor.mqtt_connected`) : indique l'état de la connexion au broker embarqué, toujours disponible (même hors ligne).
