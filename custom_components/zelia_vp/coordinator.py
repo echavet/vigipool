@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 import time
 from typing import Any
@@ -12,14 +12,14 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DEFAULT_AVAILABILITY_TIMEOUT, MODE_ELY_OPTIONS
+from .const import DEFAULT_DISCONNECT_GRACE_SECONDS, MODE_ELY_OPTIONS
 from .helpers import build_topic, format_payload, parse_numeric, parse_topic
 from .models import WRITABLE_DESCRIPTIONS, ZeliaMqttMixin
 from .mqtt_client import ZeliaMqttClient
 
 _LOGGER = logging.getLogger(__name__)
 
-AVAILABILITY_CHECK_INTERVAL = timedelta(seconds=60)
+AVAILABILITY_CHECK_INTERVAL = timedelta(seconds=10)
 
 # Coordinator data: mqtt_name → raw float (or str if non-numeric).
 ZeliaData = dict[str, float | str]
@@ -35,7 +35,7 @@ class ZeliaCoordinator(DataUpdateCoordinator[ZeliaData]):
         host: str,
         port: int,
         device_id: str,
-        availability_timeout: int = DEFAULT_AVAILABILITY_TIMEOUT,
+        disconnect_grace_seconds: int = DEFAULT_DISCONNECT_GRACE_SECONDS,
     ) -> None:
         super().__init__(
             hass,
@@ -48,8 +48,10 @@ class ZeliaCoordinator(DataUpdateCoordinator[ZeliaData]):
         self.host = host
         self.port = port
         self.device_id = device_id
-        self.availability_timeout = availability_timeout
+        self.disconnect_grace_seconds = disconnect_grace_seconds
         self._last_message_at: float | None = None
+        self._last_message_utc: datetime | None = None
+        self._disconnected_at: float | None = None
         self._last_availability_state: tuple[bool, bool] | None = None
         self._cancel_availability_timer: Any = None
         self.mqtt = ZeliaMqttClient(
@@ -79,12 +81,24 @@ class ZeliaCoordinator(DataUpdateCoordinator[ZeliaData]):
         return time.monotonic() - self._last_message_at
 
     @property
+    def last_message_time(self) -> datetime | None:
+        """UTC datetime of the last MQTT message, or None if never."""
+        return self._last_message_utc
+
+    @property
     def device_available(self) -> bool:
-        """Available iff we have received data within the timeout window."""
-        if self._last_message_at is None:
+        """Available if MQTT connected OR within grace period after disconnect.
+
+        This ensures entities stay available during the normal long silence
+        periods of the Zelia device (~915s pump on, ~3610s pump off) and only
+        become unavailable after a genuine communication loss.
+        """
+        if self.mqtt.connected:
+            return True
+        if self._disconnected_at is None:
             return False
-        age = self.last_message_age
-        return age is not None and age < self.availability_timeout
+        grace_elapsed = time.monotonic() - self._disconnected_at
+        return grace_elapsed < self.disconnect_grace_seconds
 
     @property
     def mqtt_connected(self) -> bool:
@@ -106,6 +120,17 @@ class ZeliaCoordinator(DataUpdateCoordinator[ZeliaData]):
     @callback
     def _handle_connection_change(self, connected: bool) -> None:
         """Called by MQTT client on connect/disconnect transitions."""
+        if connected:
+            self._disconnected_at = None
+            _LOGGER.info("MQTT connected to %s:%s", self.host, self.port)
+        else:
+            self._disconnected_at = time.monotonic()
+            _LOGGER.warning(
+                "MQTT disconnected from %s:%s; grace period %ds",
+                self.host,
+                self.port,
+                self.disconnect_grace_seconds,
+            )
         self._check_availability()
 
     def get_raw(self, mqtt_name: str) -> float | str | None:
@@ -166,6 +191,7 @@ class ZeliaCoordinator(DataUpdateCoordinator[ZeliaData]):
             return
 
         self._last_message_at = time.monotonic()
+        self._last_message_utc = datetime.now(timezone.utc)
         raw_num = parse_numeric(payload)
         new_data = dict(self.data)
         # Single source of truth: mqtt_name → raw (entities apply description).

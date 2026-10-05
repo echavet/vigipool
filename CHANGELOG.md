@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assistant Core), e.g. `2026.8.16`.
 
+## [2026.10.5] - 2026-10-05
+
+### Fixed
+
+- **Faux « unavailable » des entités en lecture seule** (flow, production, capteurs…) corrigé.
+  - **Cause racine** : la disponibilité était basée sur l'âge du dernier message MQTT avec un timeout de 600 s stocké dans les options. Or le device Zelia ne publie qu'à chaque changement + re-publish périodique (~915 s pompe ON, ~3610 s pompe OFF). Résultat : 5–10 min d'indisponibilité par cycle, ~45 % du temps sur 24 h.
+  - **Nouvelle logique** : disponibilité liée à la **session MQTT** (keepalive 15 s) + **grace period** après déconnexion (180 s par défaut, configurable 30–600 s). Les entités restent disponibles tant que le broker répond, même si le device est silencieux pendant des heures.
+  - **Migration automatique** : les entrées existantes (V1, option `availability_timeout`) sont migrées vers V2 (`disconnect_grace_seconds`). Aucune action utilisateur requise.
+
+### Added
+
+- **Capteur diagnostique MQTT connecté** (`binary_sensor.mqtt_connected`) : indique l'état de la connexion au broker embarqué, toujours disponible (même hors ligne).
+- **Capteur diagnostique Dernière communication** (`sensor.last_seen`) : timestamp UTC du dernier message MQTT, avec attribut `age_seconds`.
+- Tests unitaires couvrant : silence > ancien timeout conserve available, déconnexion → unavailable après grace, reconnexion restaure, migration V1→V2.
+
+### Changed
+
+- Intervalle du timer de vérification de disponibilité réduit de 60 s à 10 s pour une détection plus réactive.
+- Option de configuration renommée : `availability_timeout` → `disconnect_grace_seconds` (plage 30–600 s).
+
 ## [2026.10.2] - 2026-10-02
 
 ### Fixed
@@ -115,6 +135,7 @@ Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assist
 - Sensors, binary sensors, numbers, switches, select (electrolysis mode).
 - French and English translations, diagnostics, unit tests.
 
+[2026.10.5]: https://github.com/echavet/vigipool/releases/tag/2026.10.5
 [2026.10.2]: https://github.com/echavet/vigipool/releases/tag/2026.10.2
 [2026.8.16]: https://github.com/echavet/vigipool/releases/tag/2026.8.16
 [2026.7.25]: https://github.com/echavet/vigipool/releases/tag/2026.7.25
