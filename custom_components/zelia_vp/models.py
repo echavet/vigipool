@@ -26,7 +26,15 @@ from homeassistant.const import (
     UnitOfTime,
 )
 
-from .const import MODE_ELY_OPTIONS, PROD_STATE_MAP
+from .const import (
+    HW_VERS_RANGE,
+    MODE_ELY_OPTIONS,
+    MODEL_ID_RANGE,
+    PROD_STATE_MAP,
+    SERVER_ON_RANGE,
+    TEMP_ADJUST_RANGE,
+    WATER_HARDNESS_RANGE,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -58,7 +66,11 @@ class ZeliaSensorEntityDescription(SensorEntityDescription, ZeliaMqttMixin):
 
     # How to interpret the scaled numeric value for native_value.
     # "number" | "prod_state" | "firmware" | "error_raw" | "error_e_codes"
+    # | "status_s" | "bounded_int" | "serial"
     value_kind: str = "number"
+    # Inclusive range for value_kind "bounded_int" (rejected values → unknown).
+    int_min: int | None = None
+    int_max: int | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -235,6 +247,19 @@ SENSOR_DESCRIPTIONS: tuple[ZeliaSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_kind="error_e_codes",
     ),
+    # Vigipool S-codes. Canonical topic is u32_r/state/info (same shape as
+    # error). The device also publishes u32_r/state/value with the same
+    # integer in the 2026-07-22 capture; the raw store keys by leaf name,
+    # so both updates land on "state" (last write wins).
+    ZeliaSensorEntityDescription(
+        key="zelia_status",
+        translation_key="zelia_status",
+        mqtt_type="u32_r",
+        mqtt_name="state",
+        qualifier="info",
+        icon="mdi:information-outline",
+        value_kind="status_s",
+    ),
     ZeliaSensorEntityDescription(
         key="firmware",
         translation_key="firmware",
@@ -253,6 +278,84 @@ SENSOR_DESCRIPTIONS: tuple[ZeliaSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         suggested_display_precision=0,
+    ),
+    # Unmapped leaves, read-only and disabled until their meaning is confirmed.
+    # water_hardness (u8_w) and temp_adjust (i8_w) are writable on the device;
+    # they stay sensors so a restart cannot publish a setting.
+    ZeliaSensorEntityDescription(
+        key="server_on",
+        translation_key="server_on",
+        mqtt_type="u8_r",
+        mqtt_name="server_on",
+        qualifier="info",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        suggested_display_precision=0,
+        value_kind="bounded_int",
+        int_min=SERVER_ON_RANGE[0],
+        int_max=SERVER_ON_RANGE[1],
+    ),
+    ZeliaSensorEntityDescription(
+        key="model_id",
+        translation_key="model_id",
+        mqtt_type="u8_r",
+        mqtt_name="model_id",
+        qualifier="info",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        suggested_display_precision=0,
+        value_kind="bounded_int",
+        int_min=MODEL_ID_RANGE[0],
+        int_max=MODEL_ID_RANGE[1],
+    ),
+    ZeliaSensorEntityDescription(
+        key="hw_vers",
+        translation_key="hw_vers",
+        mqtt_type="u8_r",
+        mqtt_name="hw_vers",
+        qualifier="info",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        suggested_display_precision=0,
+        value_kind="bounded_int",
+        int_min=HW_VERS_RANGE[0],
+        int_max=HW_VERS_RANGE[1],
+    ),
+    ZeliaSensorEntityDescription(
+        key="serial_num",
+        translation_key="serial_num",
+        mqtt_type="s33_r",
+        mqtt_name="serial_num",
+        qualifier="info",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_kind="serial",
+    ),
+    ZeliaSensorEntityDescription(
+        key="water_hardness",
+        translation_key="water_hardness",
+        mqtt_type="u8_w",
+        mqtt_name="water_hardness",
+        qualifier="info",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        suggested_display_precision=0,
+        value_kind="bounded_int",
+        int_min=WATER_HARDNESS_RANGE[0],
+        int_max=WATER_HARDNESS_RANGE[1],
+    ),
+    ZeliaSensorEntityDescription(
+        key="temp_adjust",
+        translation_key="temp_adjust",
+        mqtt_type="i8_w",
+        mqtt_name="temp_adjust",
+        qualifier="info",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        suggested_display_precision=0,
+        value_kind="bounded_int",
+        int_min=TEMP_ADJUST_RANGE[0],
+        int_max=TEMP_ADJUST_RANGE[1],
     ),
 )
 
@@ -418,6 +521,13 @@ def _build_by_key(
 
 
 DESCRIPTIONS_BY_KEY: dict[str, ZeliaMqttMixin] = _build_by_key(_all_descriptions())
+# Only command entities. Diagnostic sensors may describe a *_w topic
+# (water_hardness, temp_adjust) but must never be published — a restart
+# must not change device settings.
 WRITABLE_DESCRIPTIONS: dict[str, ZeliaMqttMixin] = {
-    key: desc for key, desc in DESCRIPTIONS_BY_KEY.items() if desc.is_writable
+    key: desc
+    for key, desc in _build_by_key(
+        (*NUMBER_DESCRIPTIONS, *SWITCH_DESCRIPTIONS, *SELECT_DESCRIPTIONS)
+    ).items()
+    if desc.is_writable
 }

@@ -16,11 +16,16 @@ from .coordinator import ZeliaCoordinator
 from .entity import ZeliaEntity
 from .helpers import (
     apply_read_scale,
+    bounded_int,
     error_attributes_from_raw,
     error_e_codes_state_from_raw,
     firmware_from_raw,
     is_temp_sentinel,
+    load_status_catalog,
     prod_state_from_raw,
+    serial_from_raw,
+    status_attributes_from_raw,
+    status_state_from_raw,
 )
 from .models import SENSOR_DESCRIPTIONS, ZeliaSensorEntityDescription
 
@@ -53,10 +58,19 @@ class ZeliaSensor(ZeliaEntity, SensorEntity):
     ) -> None:
         super().__init__(coordinator, description)
 
+    def _status_catalog(self) -> dict[str, str]:
+        """S-code texts for the Home Assistant language (fr or en)."""
+        language = None
+        if self.hass is not None:
+            language = self.hass.config.language
+        return load_status_catalog(language)
+
     @property
     def native_value(self):
         """Return scaled / mapped value from raw store + description."""
         desc = self.entity_description
+        if desc.value_kind == "serial":
+            return serial_from_raw(self.coordinator.get_raw(desc.mqtt_name))
         raw = self._raw_number()
         if raw is None:
             return None
@@ -68,12 +82,20 @@ class ZeliaSensor(ZeliaEntity, SensorEntity):
             return firmware_from_raw(raw)
         if desc.value_kind == "error_e_codes":
             return error_e_codes_state_from_raw(raw)
+        if desc.value_kind == "status_s":
+            return status_state_from_raw(raw, self._status_catalog())
+        if desc.value_kind == "bounded_int":
+            low = 0 if desc.int_min is None else desc.int_min
+            high = 0 if desc.int_max is None else desc.int_max
+            return bounded_int(raw, low, high)
         return apply_read_scale(raw, desc.scale)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Expose raw codes and decoded error bits."""
+        """Expose raw codes and decoded error / status bits."""
         kind = self.entity_description.value_kind
+        if kind == "status_s":
+            return status_attributes_from_raw(self._raw_number(), self._status_catalog())
         raw = self._raw_number()
         if raw is None:
             return None

@@ -44,8 +44,15 @@ Préfixe MQTT : `{device_id}/…` (ex. `zelix_8C4B14821190`)
 | RSSI | `i8_r/rssi/info/reported` | — | dBm |
 | Erreur | `u32_r/error/info/reported` | bitmask brut | — |
 | Code erreur Vigipool | `u32_r/error/info/reported` | bits → `En` | `none` / `E14` / `E2+E14` |
+| Statut Zelia | `u32_r/state/info/reported` | bits → `Sn` | voir ci-dessous |
 | Firmware | `u16_r/sw_vers/info/reported` | str | — |
-| Type cellule | `u8_r/cell_type/value/reported` | — | — |
+| Type cellule | `u8_r/cell_type/value/reported` | — | — (désactivé par défaut) |
+| Serveur (`server_on`) | `u8_r/server_on/info/reported` | brut 0/1 | diagnostic, désactivé |
+| Modèle (`model_id`) | `u8_r/model_id/info/reported` | brut 0–255 | diagnostic, désactivé |
+| Version matérielle | `u8_r/hw_vers/info/reported` | brut 0–255 | diagnostic, désactivé |
+| Numéro de série | `s33_r/serial_num/info/reported` | hex, 1–32 car. | diagnostic, désactivé |
+| Dureté de l'eau | `u8_w/water_hardness/info/reported` | brut 0–255, **lecture seule** | diagnostic, désactivé |
+| Ajustement température | `i8_w/temp_adjust/info/reported` | brut −128–127, **lecture seule** | diagnostic, désactivé |
 
 **prod_on (confirmé en conditions réelles) :**
 
@@ -84,6 +91,60 @@ Attributs (`error` et `error_e_codes`) :
 Le binary sensor **Défaut** est `on` dès que le registre ≠ 0.
 
 **Note :** une puissance MQTT forcée trop basse (ex. 30–40 %) peut déclencher un **faux E14** (le firmware compare le courant à un seuil non proportionnel).
+
+### Registre de statut (`u32_r/state`)
+
+Masque 32 bits. **Code application Vigipool `Sn` = bit `n`**, comme `En` pour `error`.
+
+Chemin vérifié dans `tests/fixtures/mqtt_zelix_sample.txt` (2026-07-22, même `zelix_8C4B14821190`) :
+
+| Topic | Exemple |
+|-------|---------|
+| `u32_r/state/info/reported` | `2147483648` |
+| `u32_r/state/value/reported` | `2147483648` |
+
+Les deux qualificateurs portent le même entier dans cette capture. Le coordinator indexe par le nom de feuille (`state`) : la dernière valeur `reported` gagne. Le capteur décrit le topic `info`, comme `error`. Le diagnostic HA ne conserve pas le topic complet, seulement la feuille — la valeur du 2026-10-24 (`2151677952`) est donc celle qui a été stockée, quel que soit le qualificateur arrivé en dernier.
+
+| Valeur MQTT | Bits | État affiché | Confirmé |
+|-------------|------|--------------|----------|
+| `0` | — | `aucun` (EN : `none`) | convention |
+| `2151677952` (`0x80400000`) | 22 et 31 | **S22** : Température minimale de l'eau atteinte. Arrêt du traitement | **oui** pour le bit 22 (2026-10-24 : eau 13,0 °C < seuil 15,0 °C, `prod_on=0`, notification app « Code S22 ») |
+| `2147483648` (`0x80000000`) | 31 | `S31 (inconnu)` | bit 31 **non** confirmé (présent aussi le 2026-07-22 alors que la production tournait) |
+
+Le **code principal** (état du capteur) est le bit confirmé le plus bas s'il y en a un, sinon le bit le plus bas. Les autres codes restent dans les attributs. Un bit sans texte confirmé s'affiche `S{n} (inconnu)` (EN : `S{n} (unknown)`). La table de messages ne contient que des textes croisés avec l'app — aujourd'hui **S22** seulement. L'anglais est la traduction de la phrase française confirmée, pas une seconde capture.
+
+Attributs (enregistrés avec l'historique du capteur, pour confirmer un futur code) :
+
+| Attribut | Exemple (S22 + bit 31) |
+|----------|------------------------|
+| `raw` | `2151677952` |
+| `hex` | `0x80400000` |
+| `s_codes` | `["S22", "S31"]` |
+| `messages` | `["S22 : Température minimale de l'eau atteinte. Arrêt du traitement", "S31 (inconnu)"]` |
+
+Si un bit inconnu s'ajoute sans changer le code principal, l'état texte peut rester identique : `raw` / `s_codes` / `messages` changent et Home Assistant enregistre quand même la mise à jour.
+
+#### Événement `zelia_vp_status`
+
+Un événement par bit qui **passe** à 1 ou à 0 :
+
+| Champ | Exemple |
+|-------|---------|
+| `device_id` | `zelix_8C4B14821190` |
+| `code` | `S22` |
+| `message` | `S22 : Température minimale de l'eau atteinte. Arrêt du traitement` |
+| `active` | `true` (montée) ou `false` (descente) |
+| `raw` | registre complet après le changement |
+
+Pas d'événement parasite :
+
+- Le **premier** échantillon valide du processus (démarrage, rechargement de l'entrée, message retenu à la souscription) fixe la référence et **n'émet rien**. Un S22 déjà actif est visible sur le capteur ; les automatisations qui ont besoin de l'état courant lisent le capteur, pas seulement l'événement.
+- La déconnexion MQTT et le passage *unavailable* **ne remettent pas** la référence à zéro et ne synthétisent pas d'extinctions. Le contrôle périodique de disponibilité ne relit pas le registre.
+- Une reconnexion qui rejoue **la même** valeur (message retenu, ou les deux qualificateurs `info` et `value`) n'émet rien.
+- Une valeur **réellement différente** après la coupure émet les fronts manqués : ce sont de vrais changements, pas un replay.
+- Un payload non entier, négatif ou hors `0 … 0xFFFFFFFF` est ignoré et ne déplace pas la référence.
+
+Les codes `En` (`error`) ne sont pas concernés : aucun événement n'est ajouté sur ce registre.
 
 ### Durées d’électrolyse
 

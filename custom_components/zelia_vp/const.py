@@ -64,3 +64,29 @@ ERROR_MASK_HIGH_SALT = 1 << ERROR_BIT_HIGH_SALT  # 16384
 ERROR_BIT_LABELS: dict[int, str] = {
     ERROR_BIT_HIGH_SALT: "high_salt",
 }
+
+# Bus event fired when a bit of u32_r/state turns on or off.
+# See helpers.StatusEdgeTracker for the no-spurious-edge rules.
+EVENT_ZELIA_STATUS = "zelia_vp_status"
+
+# MQTT u32_r/state is a bitmask. Vigipool app code S{n} = bit n.
+# Field-confirmed 2026-10-24 (HA diagnostics raw_store, same device):
+#   state = 2151677952 (0x80400000) = bit 22 + bit 31
+#   value_temp = 130 (13.0 °C) < temp_min_off_ely = 150 (15.0 °C)
+#   prod_on = 0
+#   app text: "Température minimale de l'eau atteinte. Arrêt du traitement
+#   - Code S22"
+# Bit 31 is also set in the 2026-07-22 capture (2147483648 = 0x80000000,
+# production running). Its meaning is not confirmed — rendered as unknown.
+# Confirmed message texts live only in translations (entity.sensor.zelia_status).
+STATUS_BIT_MIN_WATER_TEMP = 22
+
+# Diagnostic leaves. Ranges match the MQTT type in tests/fixtures (sanity
+# checks). These topics are exposed read-only; water_hardness and temp_adjust
+# are device-writable but their scales are unconfirmed, so we never publish.
+SERVER_ON_RANGE = (0, 1)
+MODEL_ID_RANGE = (0, 255)
+HW_VERS_RANGE = (0, 255)
+WATER_HARDNESS_RANGE = (0, 255)
+TEMP_ADJUST_RANGE = (-128, 127)  # i8_w
+SERIAL_MAX_LENGTH = 32  # s33_r: 32 hex chars observed (type width includes NUL)

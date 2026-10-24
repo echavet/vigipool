@@ -66,8 +66,22 @@
       "rssi": { "name": "RSSI" },
       "error": { "name": "Error code" },
       "error_e_codes": { "name": "Vigipool error code" },
+      "zelia_status": {
+        "name": "Zelia status",
+        "state": {
+          "none": "none",
+          "unknown": "S{code} (unknown)",
+          "s22": "Minimum water temperature reached. Treatment stopped"
+        }
+      },
       "firmware": { "name": "Firmware" },
       "cell_type": { "name": "Cell type" },
+      "server_on": { "name": "Server (server_on)" },
+      "model_id": { "name": "Model (model_id)" },
+      "hw_vers": { "name": "Hardware version" },
+      "serial_num": { "name": "Serial number" },
+      "water_hardness": { "name": "Water hardness" },
+      "temp_adjust": { "name": "Temperature adjustment" },
       "last_seen": { "name": "Last seen" }
     },
     "binary_sensor": {

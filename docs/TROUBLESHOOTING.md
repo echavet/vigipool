@@ -38,6 +38,18 @@ Causes possibles :
 
 Les autres bits s’affichent `E{n}` sans libellé tant qu’ils n’ont pas été croisés avec l’app.
 
+## Code S22 — température d'eau trop basse
+
+Le registre MQTT `state` est un **masque de bits**. `Sn` = bit `n` (comme `En` pour `error`).
+
+`2151677952` = `0x80400000` = bit 22 + bit 31. Le bit 22 est **S22** : *Température minimale de l'eau atteinte. Arrêt du traitement* (croisé le 2026-10-24 avec l'app, eau à 13,0 °C sous le seuil 15,0 °C, production arrêtée).
+
+- Capteur **Statut Zelia** = `S22 : …`
+- Attribut `raw` = la valeur brute (à garder : c'est elle qui permettra de confirmer un futur code)
+- Événement `zelia_vp_status` quand le bit **change** (pas au démarrage, pas au simple reconnect)
+
+Le bit 31 est souvent présent (`S31 (inconnu)`) y compris pendant une production normale. Ne pas le traiter comme un défaut tant qu'il n'a pas été croisé avec l'app.
+
 ## Mode / puissance ne changent pas
 
 - Vérifier les logs HA (`zelia_vp`)
