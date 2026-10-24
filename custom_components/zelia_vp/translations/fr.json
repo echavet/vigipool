@@ -66,8 +66,22 @@
       "rssi": { "name": "RSSI" },
       "error": { "name": "Code erreur" },
       "error_e_codes": { "name": "Code erreur Vigipool" },
+      "zelia_status": {
+        "name": "Statut Zelia",
+        "state": {
+          "none": "aucun",
+          "unknown": "S{code} (inconnu)",
+          "s22": "Température minimale de l'eau atteinte. Arrêt du traitement"
+        }
+      },
       "firmware": { "name": "Firmware" },
       "cell_type": { "name": "Type de cellule" },
+      "server_on": { "name": "Serveur (server_on)" },
+      "model_id": { "name": "Modèle (model_id)" },
+      "hw_vers": { "name": "Version matérielle" },
+      "serial_num": { "name": "Numéro de série" },
+      "water_hardness": { "name": "Dureté de l'eau" },
+      "temp_adjust": { "name": "Ajustement température" },
       "last_seen": { "name": "Dernière communication" }
     },
     "binary_sensor": {

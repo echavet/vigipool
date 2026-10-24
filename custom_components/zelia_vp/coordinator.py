@@ -12,8 +12,19 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DEFAULT_DISCONNECT_GRACE_SECONDS, MODE_ELY_OPTIONS
-from .helpers import build_topic, format_payload, parse_numeric, parse_topic
+from .const import (
+    DEFAULT_DISCONNECT_GRACE_SECONDS,
+    EVENT_ZELIA_STATUS,
+    MODE_ELY_OPTIONS,
+)
+from .helpers import (
+    StatusEdgeTracker,
+    build_topic,
+    format_payload,
+    load_status_catalog,
+    parse_numeric,
+    parse_topic,
+)
 from .models import WRITABLE_DESCRIPTIONS, ZeliaMqttMixin
 from .mqtt_client import ZeliaMqttClient
 
@@ -54,6 +65,8 @@ class ZeliaCoordinator(DataUpdateCoordinator[ZeliaData]):
         self._disconnected_at: float | None = None
         self._last_availability_state: tuple[bool, bool] | None = None
         self._cancel_availability_timer: Any = None
+        # Survives MQTT reconnects on purpose. See StatusEdgeTracker.
+        self._status_edges = StatusEdgeTracker()
         self.mqtt = ZeliaMqttClient(
             host, port, device_id, self._handle_message, self._handle_connection_change
         )
@@ -131,6 +144,8 @@ class ZeliaCoordinator(DataUpdateCoordinator[ZeliaData]):
                 self.port,
                 self.disconnect_grace_seconds,
             )
+        # Do not touch _status_edges. A disconnect is not a falling edge,
+        # and the retained replay after reconnect must stay silent.
         self._check_availability()
 
     def get_raw(self, mqtt_name: str) -> float | str | None:
@@ -197,6 +212,39 @@ class ZeliaCoordinator(DataUpdateCoordinator[ZeliaData]):
         # Single source of truth: mqtt_name → raw (entities apply description).
         new_data[mqtt_name] = raw_num if raw_num is not None else payload
         self.async_set_updated_data(new_data)
+        # Only a numeric reported `state` leaf can move S-code edges.
+        # Availability ticks never reach this path.
+        if mqtt_name == "state" and raw_num is not None:
+            self._emit_status_edges(raw_num)
+
+    def _emit_status_edges(self, raw: float) -> None:
+        """Fire ``zelia_vp_status`` for bits that actually flipped.
+
+        Isolated from the MQTT callback: a decode failure must not drop the
+        session or skip the raw store update that already happened.
+        """
+        try:
+            language = None
+            config = getattr(self.hass, "config", None)
+            if config is not None:
+                language = getattr(config, "language", None)
+            catalog = load_status_catalog(language)
+            payloads = self._status_edges.observe(raw, catalog, self.device_id)
+        except Exception:  # noqa: BLE001 — never break the MQTT callback
+            _LOGGER.exception("Failed to decode Zelia status register")
+            return
+        for payload in payloads:
+            _LOGGER.info(
+                "Zelia status %s active=%s raw=%s device=%s",
+                payload["code"],
+                payload["active"],
+                payload["raw"],
+                payload["device_id"],
+            )
+            try:
+                self.hass.bus.fire(EVENT_ZELIA_STATUS, payload)
+            except Exception:  # noqa: BLE001 — one listener must not drop the rest
+                _LOGGER.exception("Failed to fire %s", EVENT_ZELIA_STATUS)
 
     async def _async_update_data(self) -> ZeliaData:
         """No polling; return current raw store."""

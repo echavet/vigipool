@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assistant Core), e.g. `2026.8.16`.
 
+## [2026.10.24] - 2026-10-24
+
+### Added
+
+- **Statut Zelia** (`zelia_status`) : décodage du registre `u32_r/state` en codes Vigipool `Sn` (bit `n` = `Sn`), sur le même modèle que les codes `En`.
+  - Confirmé le 2026-10-24 : `2151677952` (`0x80400000`) = bit 22 + bit 31, eau à 13,0 °C sous `temp_min_off_ely` (15,0 °C), production arrêtée, texte app « Température minimale de l'eau atteinte. Arrêt du traitement - Code S22 ».
+  - État = code principal + message (ex. `S22 : Température minimale de l'eau atteinte. Arrêt du traitement`). `aucun` / `none` si le registre vaut 0.
+  - Seul **S22** a un texte confirmé (FR + EN). Les autres bits s'affichent `S{n} (inconnu)` / `S{n} (unknown)`.
+  - Attributs enregistrés dans l'historique : `raw`, `hex`, `s_codes`, `messages`.
+- **Événement** `zelia_vp_status` à chaque front de bit (`code`, `message`, `active`, `raw`, `device_id`). Pas d'événement au premier échantillon (démarrage / rechargement), ni sur une reconnexion qui rejoue la même valeur, ni quand l'entité passe *unavailable*.
+- Capteurs diagnostiques **désactivés par défaut** (lecture seule) : `server_on`, `model_id`, `hw_vers`, `serial_num`, `water_hardness`, `temp_adjust`. Les topics `*_w` ne sont pas publiés.
+
+### Notes
+
+- Le bit 31 est présent dans la capture du 2026-07-22 (`0x80000000`, production en cours) et dans le diagnostic du 2026-10-24. Signification non confirmée.
+- Le chemin `u32_r/state/info/reported` est celui de la capture ; `u32_r/state/value/reported` porte le même entier et met à jour la même feuille `state`.
+
 ## [2026.10.5] - 2026-10-05
 
 ### Fixed
@@ -137,6 +154,7 @@ Versioning follows **CalVer** `YYYY.M.D` (date-based, same spirit as Home Assist
 - Sensors, binary sensors, numbers, switches, select (electrolysis mode).
 - French and English translations, diagnostics, unit tests.
 
+[2026.10.24]: https://github.com/echavet/vigipool/releases/tag/2026.10.24
 [2026.10.5]: https://github.com/echavet/vigipool/releases/tag/2026.10.5
 [2026.10.2]: https://github.com/echavet/vigipool/releases/tag/2026.10.2
 [2026.8.16]: https://github.com/echavet/vigipool/releases/tag/2026.8.16

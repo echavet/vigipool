@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import re
 import sys
 import types
 from pathlib import Path
@@ -551,3 +553,272 @@ def test_options_flow_persists_values() -> None:
     assert re.search(good_pattern, content), (
         "Options flow should return async_create_entry(data={CONF_DISCONNECT_GRACE: ...})"
     )
+
+
+# =============================================================================
+# Vigipool S-codes (u32_r/state) — 2026.10.24
+# =============================================================================
+
+# HA diagnostics raw_store, zelix_8C4B14821190, 2026-10-24.
+# state leaf only: the coordinator does not keep the full topic.
+LIVE_STATE_2026_10_24 = 2151677952  # 0x80400000
+LIVE_VALUE_TEMP = 130.0  # 13.0 °C
+LIVE_TEMP_MIN_OFF = 150.0  # 15.0 °C
+LIVE_PROD_ON = 0.0
+# Same device, tests/fixtures/mqtt_zelix_sample.txt, 2026-07-22.
+CAPTURE_STATE_2026_07_22 = 2147483648  # 0x80000000, bit 31 only
+S22_FR = "Température minimale de l'eau atteinte. Arrêt du traitement"
+S22_EN = "Minimum water temperature reached. Treatment stopped"
+S22_STATE_FR = f"S22 : {S22_FR}"
+
+
+def test_live_diag_state_is_s22_plus_bit_31() -> None:
+    """The 2026-10-24 register matches bit 22 (S22) and unknown bit 31."""
+    assert LIVE_STATE_2026_10_24 == 0x80400000
+    assert LIVE_STATE_2026_10_24 == (1 << 22) | (1 << 31)
+    assert const.STATUS_BIT_MIN_WATER_TEMP == 22
+    # Production was off because water was under the stop threshold.
+    assert helpers.apply_read_scale(LIVE_VALUE_TEMP, 0.1) == 13.0
+    assert helpers.apply_read_scale(LIVE_TEMP_MIN_OFF, 0.1) == 15.0
+    assert LIVE_VALUE_TEMP < LIVE_TEMP_MIN_OFF
+    assert helpers.prod_state_from_raw(LIVE_PROD_ON) == "off"
+    # July capture, while producing, is bit 31 alone — not S22.
+    assert CAPTURE_STATE_2026_07_22 == 1 << 31
+    assert helpers.status_u32(float(LIVE_STATE_2026_10_24)) == LIVE_STATE_2026_10_24
+
+
+def test_fixture_confirms_state_topic_path() -> None:
+    """Full topic is not in HA diagnostics; the MQTT capture has it.
+
+    ``state`` is published twice (info and value) with the same payload.
+    ``error`` is info-only. The integration keeps one leaf, like every
+    other mqtt_name.
+    """
+    text = (ROOT / "tests" / "fixtures" / "mqtt_zelix_sample.txt").read_text()
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    state_lines = [line for line in lines if "/state/" in line]
+    assert state_lines == [
+        "zelix_8C4B14821190/u32_r/state/info/reported 2147483648",
+        "zelix_8C4B14821190/u32_r/state/value/reported 2147483648",
+    ]
+    assert "zelix_8C4B14821190/u32_r/error/info/reported 0" in lines
+    # Leaf name the coordinator stores, for both qualifiers.
+    for line in state_lines:
+        parsed = helpers.parse_topic(line.split()[0])
+        assert parsed is not None
+        _device, mqtt_type, name, qualifier, direction = parsed
+        assert mqtt_type == "u32_r"
+        assert name == "state"
+        assert direction == "reported"
+        assert qualifier in {"info", "value"}
+
+
+def test_status_catalog_confirms_only_s22() -> None:
+    """Message table is the translation files, and only S22 is confirmed."""
+    paths = {
+        "fr": PKG_DIR / "translations" / "fr.json",
+        "en": PKG_DIR / "translations" / "en.json",
+        "strings": PKG_DIR / "strings.json",
+    }
+    catalogs = {name: json.loads(path.read_text()) for name, path in paths.items()}
+    states = {
+        name: data["entity"]["sensor"]["zelia_status"]["state"]
+        for name, data in catalogs.items()
+    }
+    for state in states.values():
+        s_keys = sorted(key for key in state if re.fullmatch(r"s\d+", key))
+        assert s_keys == ["s22"]
+        assert "S22" not in state["s22"]
+    assert states["fr"]["none"] == "aucun"
+    assert states["fr"]["unknown"] == "S{code} (inconnu)"
+    assert states["fr"]["s22"] == S22_FR
+    assert states["en"]["none"] == "none"
+    assert states["en"]["unknown"] == "S{code} (unknown)"
+    assert states["en"]["s22"] == S22_EN
+    assert states["strings"] == states["en"]
+    assert catalogs["fr"]["entity"]["sensor"]["zelia_status"]["name"] == "Statut Zelia"
+    assert catalogs["en"]["entity"]["sensor"]["zelia_status"]["name"] == "Zelia status"
+
+    fr = helpers.load_status_catalog("fr")
+    en = helpers.load_status_catalog("en")
+    assert helpers.load_status_catalog("fr-FR")["s22"] == S22_FR
+    assert helpers.status_confirmed_bits(fr) == {22: S22_FR}
+    assert helpers.status_confirmed_bits(en) == {22: S22_EN}
+    # English fallback if a caller asks for another language.
+    assert helpers.load_status_catalog("de")["s22"] == S22_EN
+
+
+def test_status_state_and_attributes_live_value() -> None:
+    fr = helpers.load_status_catalog("fr")
+    state = helpers.status_state_from_raw(float(LIVE_STATE_2026_10_24), fr)
+    assert state == S22_STATE_FR
+    attrs = helpers.status_attributes_from_raw(float(LIVE_STATE_2026_10_24), fr)
+    assert attrs == {
+        "raw": LIVE_STATE_2026_10_24,
+        "hex": "0x80400000",
+        "s_codes": ["S22", "S31"],
+        "messages": [S22_STATE_FR, "S31 (inconnu)"],
+    }
+    # Confirmed code stays the headline even when a lower unknown bit is set.
+    mixed = (1 << 5) | (1 << 22)
+    assert helpers.status_state_from_raw(mixed, fr) == S22_STATE_FR
+    mixed_attrs = helpers.status_attributes_from_raw(mixed, fr)
+    assert mixed_attrs is not None
+    assert mixed_attrs["s_codes"] == ["S5", "S22"]
+    assert mixed_attrs["messages"][0] == "S5 (inconnu)"
+    # Bit 31 alone (July capture) is unknown, not "aucun".
+    assert helpers.status_state_from_raw(CAPTURE_STATE_2026_07_22, fr) == "S31 (inconnu)"
+    assert helpers.status_state_from_raw(0, fr) == "aucun"
+    zero = helpers.status_attributes_from_raw(0, fr)
+    assert zero == {"raw": 0, "hex": "0x0", "s_codes": [], "messages": []}
+    en = helpers.load_status_catalog("en")
+    assert helpers.status_state_from_raw(0, en) == "none"
+    assert helpers.status_state_from_raw(1 << 22, en) == f"S22 : {S22_EN}"
+    assert helpers.status_state_from_raw(1 << 7, en) == "S7 (unknown)"
+    assert helpers.status_state_from_raw(None, fr) is None
+    assert helpers.status_attributes_from_raw(None, fr) is None
+    # Strict register: no silent truncation, no sign wrap (unlike error).
+    assert helpers.status_u32(1.5) is None
+    assert helpers.status_u32(-1) is None
+    assert helpers.status_u32(float("nan")) is None
+    assert helpers.status_u32(0x1_0000_0000) is None
+
+
+def test_status_events_skip_baseline_replay_and_invalid() -> None:
+    """No events on startup, identical replay, or unavailable-style gaps.
+
+    A real edge after the baseline still emits one payload per flipped bit.
+    """
+    catalog = helpers.load_status_catalog("fr")
+    device = "zelix_8C4B14821190"
+    tracker = helpers.StatusEdgeTracker()
+
+    # Startup / retained snapshot, including S22 already active: silence.
+    assert tracker.observe(float(LIVE_STATE_2026_10_24), catalog, device) == []
+    assert tracker.raw == LIVE_STATE_2026_10_24
+
+    # Reconnect replay and the duplicate info/value topic: silence.
+    assert tracker.observe(LIVE_STATE_2026_10_24, catalog, device) == []
+    assert tracker.observe(float(LIVE_STATE_2026_10_24), catalog, device) == []
+
+    # Invalid payloads must not clear the baseline (would fake falling edges).
+    assert tracker.observe(None, catalog, device) == []
+    assert tracker.observe(1.5, catalog, device) == []
+    assert tracker.observe(-1, catalog, device) == []
+    assert tracker.raw == LIVE_STATE_2026_10_24
+
+    # S22 clears, bit 31 stays. One falling edge, not a startup burst.
+    cleared = tracker.observe(CAPTURE_STATE_2026_07_22, catalog, device)
+    assert cleared == [
+        {
+            "device_id": device,
+            "code": "S22",
+            "message": S22_STATE_FR,
+            "active": False,
+            "raw": CAPTURE_STATE_2026_07_22,
+        }
+    ]
+
+    # Gap with no sample (disconnect / unavailable) does not move the tracker.
+    assert tracker.raw == CAPTURE_STATE_2026_07_22
+    assert tracker.observe(CAPTURE_STATE_2026_07_22, catalog, device) == []
+
+    # Real rising edges after that, lowest bit first.
+    risen = tracker.observe((1 << 5) | (1 << 22) | (1 << 31), catalog, device)
+    assert [item["code"] for item in risen] == ["S5", "S22"]
+    assert [item["active"] for item in risen] == [True, True]
+    assert risen[1]["message"] == S22_STATE_FR
+    assert risen[0]["message"] == "S5 (inconnu)"
+    assert all(item["raw"] == (1 << 5) | (1 << 22) | (1 << 31) for item in risen)
+
+
+def test_status_edge_source_ignores_availability_and_reconnect() -> None:
+    """The coordinator must not reset or emit from availability / MQTT session."""
+    source = (PKG_DIR / "coordinator.py").read_text()
+
+    def body(name: str, nxt: str) -> str:
+        start = source.index(f"def {name}")
+        end = source.index(f"def {nxt}", start)
+        return source[start:end]
+
+    availability = body("_check_availability", "_handle_connection_change")
+    connection = body("_handle_connection_change", "get_raw")
+    handle = body("_handle_message", "_emit_status_edges")
+    assert "self._status_edges" not in availability
+    assert "self._status_edges" not in connection
+    assert 'mqtt_name == "state"' in handle
+    assert "raw_num is not None" in handle
+    assert "EVENT_ZELIA_STATUS" in source
+    assert "StatusEdgeTracker" in source
+
+
+def test_diagnostic_leaves_are_read_only_and_disabled() -> None:
+    """Unmapped leaves are disabled diagnostic sensors and cannot be published."""
+    content = (PKG_DIR / "models.py").read_text()
+
+    def block(key: str) -> str:
+        start = content.index(f'key="{key}"')
+        end = content.find("ZeliaSensorEntityDescription(", start + 1)
+        if end == -1:
+            end = content.find("BINARY_SENSOR_DESCRIPTIONS", start)
+        return content[start:end]
+
+    status = block("zelia_status")
+    assert 'mqtt_type="u32_r"' in status
+    assert 'mqtt_name="state"' in status
+    assert 'qualifier="info"' in status
+    assert 'value_kind="status_s"' in status
+    assert "entity_registry_enabled_default=False" not in status
+
+    expected = {
+        "server_on": ('mqtt_type="u8_r"', "int_min=SERVER_ON_RANGE[0]"),
+        "model_id": ('mqtt_type="u8_r"', "int_min=MODEL_ID_RANGE[0]"),
+        "hw_vers": ('mqtt_type="u8_r"', "int_min=HW_VERS_RANGE[0]"),
+        "serial_num": ('mqtt_type="s33_r"', 'value_kind="serial"'),
+        "water_hardness": ('mqtt_type="u8_w"', "int_min=WATER_HARDNESS_RANGE[0]"),
+        "temp_adjust": ('mqtt_type="i8_w"', "int_min=TEMP_ADJUST_RANGE[0]"),
+    }
+    for key, snippets in expected.items():
+        chunk = block(key)
+        assert "entity_registry_enabled_default=False" in chunk
+        assert "EntityCategory.DIAGNOSTIC" in chunk
+        for snippet in snippets:
+            assert snippet in chunk, f"{key} missing {snippet}"
+
+    writable = content[content.index("WRITABLE_DESCRIPTIONS") :]
+    assert "SENSOR_DESCRIPTIONS" not in writable
+    assert "*NUMBER_DESCRIPTIONS, *SWITCH_DESCRIPTIONS, *SELECT_DESCRIPTIONS" in writable
+
+
+def test_diagnostic_leaf_sanity_checks() -> None:
+    """Out-of-range or non-integer leaves stay unknown; live values pass."""
+    assert helpers.bounded_int(1, *const.SERVER_ON_RANGE) == 1
+    assert helpers.bounded_int(0, *const.SERVER_ON_RANGE) == 0
+    assert helpers.bounded_int(2, *const.SERVER_ON_RANGE) is None
+    assert helpers.bounded_int(1.5, *const.SERVER_ON_RANGE) is None
+    assert helpers.bounded_int(6, *const.MODEL_ID_RANGE) == 6
+    assert helpers.bounded_int(256, *const.MODEL_ID_RANGE) is None
+    assert helpers.bounded_int(1, *const.HW_VERS_RANGE) == 1
+    assert helpers.bounded_int(3, *const.WATER_HARDNESS_RANGE) == 3
+    assert helpers.bounded_int(-1, *const.WATER_HARDNESS_RANGE) is None
+    assert helpers.bounded_int(5, *const.TEMP_ADJUST_RANGE) == 5
+    assert helpers.bounded_int(-1, *const.TEMP_ADJUST_RANGE) == -1
+    assert helpers.bounded_int(128, *const.TEMP_ADJUST_RANGE) is None
+    assert helpers.bounded_int(-129, *const.TEMP_ADJUST_RANGE) is None
+    assert helpers.bounded_int(float("nan"), *const.TEMP_ADJUST_RANGE) is None
+    serial = "060101000000000000008C4B14821190"
+    assert helpers.serial_from_raw(serial) == serial
+    assert helpers.serial_from_raw(f"  {serial}  ") == serial
+    assert helpers.serial_from_raw("") is None
+    assert helpers.serial_from_raw(" ") is None
+    assert helpers.serial_from_raw("ZZ") is None
+    assert helpers.serial_from_raw("A" * 33) is None
+    # A numeric store would mean the hex was lost; do not display it.
+    assert helpers.serial_from_raw(6010100000000000000) is None
+
+
+def test_manifest_calver_matches_changelog() -> None:
+    manifest = json.loads((PKG_DIR / "manifest.json").read_text())
+    assert manifest["version"] == "2026.10.24"
+    changelog = (ROOT / "CHANGELOG.md").read_text()
+    assert "## [2026.10.24] - 2026-10-24" in changelog
